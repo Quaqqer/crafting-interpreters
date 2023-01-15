@@ -6,22 +6,16 @@ cabal-version: 1.12
 
 name:           tree-walker
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/tree-walker#readme>
-homepage:       https://github.com/githubuser/tree-walker#readme
-bug-reports:    https://github.com/githubuser/tree-walker/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2023 Author name here
-license:        BSD3
-license-file:   LICENSE
+description:    Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree-walker#readme>
+homepage:       https://github.com/Quaqqer/crafting-interpreters?dir=tree-walker#readme
+bug-reports:    https://github.com/Quaqqer/crafting-interpreters?dir=tree-walker/issues
+author:         Emanuel S
+maintainer:     emanuel@empa.xyz
 build-type:     Simple
-extra-source-files:
-    README.md
-    CHANGELOG.md
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/tree-walker
+  location: https://github.com/Quaqqer/crafting-interpreters?dir=tree-walker
 
 library
   exposed-modules:
@@ -30,6 +24,16 @@ library
       Paths_tree_walker
   hs-source-dirs:
       src
+  default-extensions:
+      OverloadedStrings
+      DisambiguateRecordFields
+      DuplicateRecordFields
+      LambdaCase
+      MultiWayIf
+      NamedFieldPuns
+      RecordWildCards
+      TupleSections
+      ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
@@ -41,6 +45,16 @@ executable tree-walker-exe
       Paths_tree_walker
   hs-source-dirs:
       app
+  default-extensions:
+      OverloadedStrings
+      DisambiguateRecordFields
+      DuplicateRecordFields
+      LambdaCase
+      MultiWayIf
+      NamedFieldPuns
+      RecordWildCards
+      TupleSections
+      ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -54,6 +68,16 @@ test-suite tree-walker-test
       Paths_tree_walker
   hs-source-dirs:
       test
+  default-extensions:
+      OverloadedStrings
+      DisambiguateRecordFields
+      DuplicateRecordFields
+      LambdaCase
+      MultiWayIf
+      NamedFieldPuns
+      RecordWildCards
+      TupleSections
+      ViewPatterns
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
