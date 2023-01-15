@@ -1,10 +1,10 @@
 name: tree-walker
 version: 0.1.0.0
-github: "Quaqqer/crafting-interpreters?dir=tree-walker"
+github: "Quaqqer/crafting-interpreters/tree-walker"
 author: "Emanuel S"
 maintainer: "emanuel@empa.xyz"
 
-description: Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree-walker#readme>
+description: Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree/master/tree-walker#readme>
 
 dependencies:
   - base >= 4.7 && < 5

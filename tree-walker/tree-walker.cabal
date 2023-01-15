@@ -6,16 +6,17 @@ cabal-version: 1.12
 
 name:           tree-walker
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree-walker#readme>
-homepage:       https://github.com/Quaqqer/crafting-interpreters?dir=tree-walker#readme
-bug-reports:    https://github.com/Quaqqer/crafting-interpreters?dir=tree-walker/issues
+description:    Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree/master/tree-walker#readme>
+homepage:       https://github.com/Quaqqer/crafting-interpreters#readme
+bug-reports:    https://github.com/Quaqqer/crafting-interpreters/issues
 author:         Emanuel S
 maintainer:     emanuel@empa.xyz
 build-type:     Simple
 
 source-repository head
   type: git
-  location: https://github.com/Quaqqer/crafting-interpreters?dir=tree-walker
+  location: https://github.com/Quaqqer/crafting-interpreters
+  subdir: tree-walker
 
 library
   exposed-modules:
