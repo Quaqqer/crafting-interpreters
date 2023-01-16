@@ -2,7 +2,9 @@ module Lox.Scanner (Token (..), scanTokens) where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
+import Data.Char (isDigit)
 import Data.List (singleton)
+import Data.Maybe (fromMaybe)
 import Prelude hiding (take, takeWhile)
 
 data Token
@@ -27,7 +29,7 @@ data Token
   | LessEqual
   | Identifier
   | String String
-  | Number
+  | Number Double
   | And
   | Class
   | Else
@@ -62,6 +64,7 @@ data ParseError
   | ParseUnexpectedChar [Char]
   | ParseUnknownErr
   | ParseExpected [String]
+  | ParseExpectedEOF
   deriving (Show)
 
 newtype Parser a = Parser
@@ -134,6 +137,8 @@ instance Alternative Parser where
           then (e1, s1)
           else (e2, s2)
 
+infix 0 <?>
+
 (<?>) :: Parser a -> String -> Parser a
 parser <?> s =
   Parser
@@ -152,7 +157,7 @@ satisfy f =
             then
               let newLine = c == '\n'
                in Right
-                    ( 'a',
+                    ( c,
                       state
                         { rest = cs,
                           line = if newLine then line + 1 else line,
@@ -206,39 +211,64 @@ lookAhead parser =
 
 string :: String -> Parser String
 string [] = pure []
-string s = do
-  (:) <$> char (head s) <*> string (tail s)
+string (s : ss) = do
+  (:) <$> char s <*> string ss
+
+eof :: Parser ()
+eof =
+  Parser
+    ( \state@ParserState {rest} -> case rest of
+        [] -> Right ((), state)
+        _ -> Left (ParseExpectedEOF, state)
+    )
+
+number :: Parser String
+number = do
+  h <- some (satisfy isDigit)
+  t <- optional (char '.' *> some (satisfy isDigit))
+  return (h ++ fromMaybe "" t)
 
 scanTokens :: String -> Either ParseError [Token]
-scanTokens = runParser (many scanToken)
+scanTokens = runParser (lexeme (many scanToken) <* eof)
 
 stringToken :: Parser Token
 stringToken = do
   _ <- char '"'
-  content <- concat <$> many (string "\\\"" <|> singleton <$> satisfy (/= '"'))
+  content <- concat <$> many (string "\\\"" <|> (singleton <$> satisfy (/= '"')))
   _ <- char '"'
   return (String content)
 
+isWhitespace :: Char -> Bool
+isWhitespace ' ' = True
+isWhitespace '\n' = True
+isWhitespace _ = False
+
+lexeme :: Parser a -> Parser a
+lexeme parser = parser <* takeWhile isWhitespace
+
 scanToken :: Parser Token
 scanToken =
-  LeftParen <$ char '('
-    <|> RightParen <$ char ')'
-    <|> LeftBrace <$ char '{'
-    <|> RightBrace <$ char '}'
-    <|> Comma <$ char ','
-    <|> Dot <$ char '.'
-    <|> Minus <$ char '-'
-    <|> Plus <$ char '+'
-    <|> Semicolon <$ char ';'
-    <|> Star <$ char '*'
-    <|> BangEqual <$ string "!="
-    <|> Bang <$ char '!'
-    <|> EqualEqual <$ string "!="
-    <|> Equal <$ char '='
-    <|> LessEqual <$ string "!="
-    <|> Less <$ char '<'
-    <|> GreaterEqual <$ string "!="
-    <|> Greater <$ char '>'
-    <|> (lookAhead (string "//") >> takeWhile (/= '\n') >> char '\n' >> scanToken)
-    <|> Slash <$ char '/'
-    <|> stringToken
+  lexeme
+    ( LeftParen <$ char '('
+        <|> RightParen <$ char ')'
+        <|> LeftBrace <$ char '{'
+        <|> RightBrace <$ char '}'
+        <|> Comma <$ char ','
+        <|> Dot <$ char '.'
+        <|> Minus <$ char '-'
+        <|> Plus <$ char '+'
+        <|> Semicolon <$ char ';'
+        <|> Star <$ char '*'
+        <|> BangEqual <$ string "!="
+        <|> Bang <$ char '!'
+        <|> EqualEqual <$ string "=="
+        <|> Equal <$ char '='
+        <|> LessEqual <$ string "!="
+        <|> Less <$ char '<'
+        <|> GreaterEqual <$ string "!="
+        <|> Greater <$ char '>'
+        <|> (lookAhead (string "//") >> takeWhile (/= '\n') >> char '\n' >> scanToken)
+        <|> Slash <$ char '/'
+        <|> stringToken
+        <|> Number . read <$> number
+    )
