@@ -1,4 +1,4 @@
-module Lox.Scanner (Token (..), scanTokens) where
+module Lox.Scanner where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
@@ -49,7 +49,14 @@ data Token
   | EOF
   deriving (Show)
 
--- scanTokens :: String -> [TokenType]
+data WithPos a = WithPos
+  { linePos :: Int,
+    columnPos :: Int,
+    inner :: a
+  }
+
+instance Show a => Show (WithPos a) where
+  show WithPos {inner} = show inner
 
 data ParserState = ParserState
   { rest :: String,
@@ -228,8 +235,8 @@ number = do
   t <- optional (char '.' *> some (satisfy isDigit))
   return (h ++ fromMaybe "" t)
 
-scanTokens :: String -> Either ParseError [Token]
-scanTokens = runParser (takeWhile isWhitespace *> many scanToken <* eof)
+scanTokens :: String -> Either ParseError [WithPos Token]
+scanTokens = runParser (spaceConsumer *> many scanToken <* eof)
 
 stringToken :: Parser Token
 stringToken = do
@@ -244,34 +251,56 @@ isWhitespace '\n' = True
 isWhitespace _ = False
 
 lexeme :: Parser a -> Parser a
-lexeme parser = parser <* takeWhile isWhitespace
+lexeme parser = parser <* spaceConsumer
 
-scanToken :: Parser Token
+spaceConsumer :: Parser String
+spaceConsumer = do
+  s <- takeWhile isWhitespace <|> takeComment
+  if s == ""
+    then return ""
+    else (s ++) <$> spaceConsumer
+
+takeComment = do
+  _ <- string "//"
+  content <- takeWhile (/= '\n')
+  return ("//" ++ content)
+
+getState :: Parser ParserState
+getState = Parser (\state -> Right (state, state))
+
+withPos :: Parser a -> Parser (WithPos a)
+withPos parser = do
+  start <- getState
+  parsed <- parser
+  return WithPos {linePos = line start, columnPos = column start, inner = parsed}
+
+scanToken :: Parser (WithPos Token)
 scanToken =
   lexeme
-    ( LeftParen <$ char '('
-        <|> RightParen <$ char ')'
-        <|> LeftBrace <$ char '{'
-        <|> RightBrace <$ char '}'
-        <|> Comma <$ char ','
-        <|> Dot <$ char '.'
-        <|> Minus <$ char '-'
-        <|> Plus <$ char '+'
-        <|> Semicolon <$ char ';'
-        <|> Star <$ char '*'
-        <|> BangEqual <$ string "!="
-        <|> Bang <$ char '!'
-        <|> EqualEqual <$ string "=="
-        <|> Equal <$ char '='
-        <|> LessEqual <$ string "!="
-        <|> Less <$ char '<'
-        <|> GreaterEqual <$ string "!="
-        <|> Greater <$ char '>'
-        <|> (lookAhead (string "//") >> takeWhile (/= '\n') >> char '\n' >> scanToken)
-        <|> Slash <$ char '/'
-        <|> stringToken
-        <|> Number . read <$> number
-        <|> keywordOrIdentifier
+    ( withPos
+        ( LeftParen <$ char '('
+            <|> RightParen <$ char ')'
+            <|> LeftBrace <$ char '{'
+            <|> RightBrace <$ char '}'
+            <|> Comma <$ char ','
+            <|> Dot <$ char '.'
+            <|> Minus <$ char '-'
+            <|> Plus <$ char '+'
+            <|> Semicolon <$ char ';'
+            <|> Star <$ char '*'
+            <|> BangEqual <$ string "!="
+            <|> Bang <$ char '!'
+            <|> EqualEqual <$ string "=="
+            <|> Equal <$ char '='
+            <|> LessEqual <$ string "!="
+            <|> Less <$ char '<'
+            <|> GreaterEqual <$ string "!="
+            <|> Greater <$ char '>'
+            <|> Slash <$ char '/'
+            <|> stringToken
+            <|> Number . read <$> number
+            <|> keywordOrIdentifier
+        )
     )
 
 keywordOrIdentifier :: Parser Token
