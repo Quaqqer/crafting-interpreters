@@ -1,9 +1,11 @@
-module Lox.Scanner (Token (..), TokenType (..), scanTokens) where
+module Lox.Scanner (Token (..), scanTokens) where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
+import Data.List (singleton)
+import Prelude hiding (take, takeWhile)
 
-data TokenType
+data Token
   = LeftParen
   | RightParen
   | LeftBrace
@@ -24,12 +26,12 @@ data TokenType
   | Less
   | LessEqual
   | Identifier
-  | String
+  | String String
   | Number
   | And
   | Class
   | Else
-  | False
+  | FFalse
   | Fun
   | For
   | If
@@ -39,20 +41,11 @@ data TokenType
   | Return
   | Super
   | This
-  | True
+  | TTrue
   | Var
   | While
   | EOF
   deriving (Show)
-
-data Token = Token
-  { type_ :: TokenType,
-    lexeme :: String,
-    line :: Int
-  }
-
-instance Show Token where
-  show Token {type_, lexeme} = show type_ ++ " " ++ lexeme
 
 -- scanTokens :: String -> [TokenType]
 
@@ -141,6 +134,14 @@ instance Alternative Parser where
           then (e1, s1)
           else (e2, s2)
 
+(<?>) :: Parser a -> String -> Parser a
+parser <?> s =
+  Parser
+    ( \state -> case runParser' parser state of
+        Left (_, state') -> Left (ParseExpected [s], state')
+        Right r -> Right r
+    )
+
 satisfy :: (Char -> Bool) -> Parser Char
 satisfy f =
   Parser
@@ -162,6 +163,12 @@ satisfy f =
             else Left (ParseUnexpectedChar [c], state)
     )
 
+take :: Parser Char
+take = satisfy (const True)
+
+char :: Char -> Parser Char
+char c = satisfy (== c)
+
 optional :: Parser a -> Parser (Maybe a)
 optional parser =
   Parser
@@ -170,13 +177,68 @@ optional parser =
         Right (a, state') -> Right (Just a, state')
     )
 
-scanTokens :: String -> [Token]
-scanTokens source = []
-
-(<?>) :: Parser a -> String -> Parser a
-parser <?> s =
+many :: Parser a -> Parser [a]
+many parser =
   Parser
     ( \state -> case runParser' parser state of
-        Left (_, state') -> Left (ParseExpected [s], state')
-        Right r -> Right r
+        Right (a, state') -> Right (a : as, state'')
+          where
+            Right (as, state'') = runParser' (many parser) state'
+        Left _ -> Right ([], state)
     )
+
+some :: Parser a -> Parser [a]
+some parser = do
+  first <- parser
+  rest <- many parser
+  return (first : rest)
+
+takeWhile :: (Char -> Bool) -> Parser String
+takeWhile p = many (satisfy p)
+
+lookAhead :: Parser a -> Parser a
+lookAhead parser =
+  Parser
+    ( \state -> case runParser' parser state of
+        Left err -> Left err
+        Right (a, _) -> Right (a, state)
+    )
+
+string :: String -> Parser String
+string [] = pure []
+string s = do
+  (:) <$> char (head s) <*> string (tail s)
+
+scanTokens :: String -> Either ParseError [Token]
+scanTokens = runParser (many scanToken)
+
+stringToken :: Parser Token
+stringToken = do
+  _ <- char '"'
+  content <- concat <$> many (string "\\\"" <|> singleton <$> satisfy (/= '"'))
+  _ <- char '"'
+  return (String content)
+
+scanToken :: Parser Token
+scanToken =
+  LeftParen <$ char '('
+    <|> RightParen <$ char ')'
+    <|> LeftBrace <$ char '{'
+    <|> RightBrace <$ char '}'
+    <|> Comma <$ char ','
+    <|> Dot <$ char '.'
+    <|> Minus <$ char '-'
+    <|> Plus <$ char '+'
+    <|> Semicolon <$ char ';'
+    <|> Star <$ char '*'
+    <|> BangEqual <$ string "!="
+    <|> Bang <$ char '!'
+    <|> EqualEqual <$ string "!="
+    <|> Equal <$ char '='
+    <|> LessEqual <$ string "!="
+    <|> Less <$ char '<'
+    <|> GreaterEqual <$ string "!="
+    <|> Greater <$ char '>'
+    <|> (lookAhead (string "//") >> takeWhile (/= '\n') >> char '\n' >> scanToken)
+    <|> Slash <$ char '/'
+    <|> stringToken
