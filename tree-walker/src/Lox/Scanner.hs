@@ -2,7 +2,7 @@ module Lox.Scanner (Token (..), scanTokens) where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
-import Data.Char (isDigit)
+import Data.Char (isAlpha, isAlphaNum, isDigit)
 import Data.List (singleton)
 import Data.Maybe (fromMaybe)
 import Prelude hiding (take, takeWhile)
@@ -27,7 +27,7 @@ data Token
   | GreaterEqual
   | Less
   | LessEqual
-  | Identifier
+  | Identifier String
   | String String
   | Number Double
   | And
@@ -229,7 +229,7 @@ number = do
   return (h ++ fromMaybe "" t)
 
 scanTokens :: String -> Either ParseError [Token]
-scanTokens = runParser (lexeme (many scanToken) <* eof)
+scanTokens = runParser (takeWhile isWhitespace *> many scanToken <* eof)
 
 stringToken :: Parser Token
 stringToken = do
@@ -271,4 +271,30 @@ scanToken =
         <|> Slash <$ char '/'
         <|> stringToken
         <|> Number . read <$> number
+        <|> keywordOrIdentifier
     )
+
+keywordOrIdentifier :: Parser Token
+keywordOrIdentifier = do
+  s <-
+    (:)
+      <$> satisfy (\c -> isAlpha c || c == '_')
+      <*> many (satisfy (\c -> isAlphaNum c || c == '_'))
+  return $ case s of
+    "and" -> And
+    "class" -> Class
+    "else" -> Else
+    "false" -> FFalse
+    "for" -> For
+    "fun" -> Fun
+    "if" -> If
+    "nil" -> Nil
+    "or" -> Or
+    "print" -> Print
+    "return" -> Return
+    "super" -> Super
+    "this" -> This
+    "true" -> TTrue
+    "var" -> Var
+    "while" -> While
+    _ -> Identifier s
