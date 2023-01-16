@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           tree-walker
+name:           htreelox
 version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree/master/tree-walker#readme>
 homepage:       https://github.com/Quaqqer/crafting-interpreters#readme
@@ -20,10 +20,11 @@ source-repository head
 
 library
   exposed-modules:
-      Cli
-      Lib
+      Lox.Cli
+      Lox.Lox
+      Lox.Scanner
   other-modules:
-      Paths_tree_walker
+      Paths_htreelox
   hs-source-dirs:
       src
   default-extensions:
@@ -39,12 +40,13 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , optparse-applicative
   default-language: Haskell2010
 
-executable tree-walker-exe
+executable htreelox
   main-is: Main.hs
   other-modules:
-      Paths_tree_walker
+      Paths_htreelox
   hs-source-dirs:
       app
   default-extensions:
@@ -60,14 +62,15 @@ executable tree-walker-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , tree-walker
+    , htreelox
+    , optparse-applicative
   default-language: Haskell2010
 
-test-suite tree-walker-test
+test-suite htreelox-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_tree_walker
+      Paths_htreelox
   hs-source-dirs:
       test
   default-extensions:
@@ -83,5 +86,6 @@ test-suite tree-walker-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , tree-walker
+    , htreelox
+    , optparse-applicative
   default-language: Haskell2010

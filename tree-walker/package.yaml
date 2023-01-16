@@ -1,4 +1,4 @@
-name: tree-walker
+name: htreelox
 version: 0.1.0.0
 github: "Quaqqer/crafting-interpreters/tree-walker"
 author: "Emanuel S"
@@ -8,6 +8,7 @@ description: Please see the README on GitHub at <https://github.com/Quaqqer/craf
 
 dependencies:
   - base >= 4.7 && < 5
+  - optparse-applicative
 
 ghc-options:
   - -Wall
@@ -37,7 +38,7 @@ library:
   source-dirs: src
 
 executables:
-  tree-walker-exe:
+  htreelox:
     main: Main.hs
     source-dirs: app
     ghc-options:
@@ -45,10 +46,10 @@ executables:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - tree-walker
+      - htreelox
 
 tests:
-  tree-walker-test:
+  htreelox-test:
     main: Spec.hs
     source-dirs: test
     ghc-options:
@@ -56,4 +57,4 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
     dependencies:
-      - tree-walker
+      - htreelox

@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Lib
+import Lox.Cli (cli)
 
 main :: IO ()
-main = someFunc
+main = cli
