@@ -20,8 +20,10 @@ ghc-options:
   - -Wmissing-home-modules
   - -Wpartial-fields
   - -Wredundant-constraints
+  - -Wno-partial-fields
 
-default-extensions: [
+default-extensions:
+  [
     OverloadedStrings,
     DisambiguateRecordFields,
     DuplicateRecordFields,
@@ -32,9 +34,10 @@ default-extensions: [
     TupleSections,
     ViewPatterns,
     OverloadedRecordDot,
-    OverloadedRecordUpdate,
     NoFieldSelectors,
     ScopedTypeVariables,
+    FlexibleContexts,
+    FlexibleInstances,
   ]
 
 library:

@@ -13,7 +13,7 @@ runFile f = do
   source <- readFile f
   newState <- run defaultState source
 
-  when (hadError newState) $ do
+  when (newState.hadError) $ do
     exitWith (ExitFailure 65)
 
 runPrompt :: State -> IO ()

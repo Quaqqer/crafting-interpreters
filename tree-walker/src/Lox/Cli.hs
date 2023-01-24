@@ -23,7 +23,7 @@ opts =
 cli :: IO ()
 cli = do
   options <- execParser opts
-  case file options of
+  case options.file of
     Just f -> do
       runFile f
     Nothing -> do

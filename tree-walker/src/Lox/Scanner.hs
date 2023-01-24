@@ -80,6 +80,9 @@ newtype Parser a = Parser
       Either (ParseError, ParserState) (a, ParserState)
   }
 
+runParser' :: Parser a -> ParserState -> Either (ParseError, ParserState) (a, ParserState)
+runParser' p = p.runParser'
+
 runParser :: Parser a -> String -> Either ParseError a
 runParser parser source =
   case runParser'
@@ -134,13 +137,13 @@ instance Alternative Parser where
       mergeErr
         (ParseExpected lEx, s1)
         (ParseExpected rEx, s2) =
-          if offset s1 == offset s2
+          if s1.offset == s2.offset
             then (ParseExpected (lEx ++ rEx), s1)
             else firstErr (ParseExpected lEx, s1) (ParseExpected rEx, s2)
       mergeErr lErr sErr = firstErr lErr sErr
 
       firstErr (e1, s1) (e2, s2) =
-        if offset s1 >= offset s2
+        if s1.offset >= s2.offset
           then (e1, s1)
           else (e2, s2)
 
@@ -260,6 +263,7 @@ spaceConsumer = do
     then return ""
     else (s ++) <$> spaceConsumer
 
+takeComment :: Parser String
 takeComment = do
   _ <- string "//"
   content <- takeWhile (/= '\n')
@@ -272,7 +276,7 @@ withPos :: Parser a -> Parser (WithPos a)
 withPos parser = do
   start <- getState
   parsed <- parser
-  return WithPos {linePos = line start, columnPos = column start, inner = parsed}
+  return WithPos {linePos = start.line, columnPos = start.column, inner = parsed}
 
 scanToken :: Parser (WithPos Token)
 scanToken =
