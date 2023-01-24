@@ -20,8 +20,10 @@ source-repository head
 
 library
   exposed-modules:
+      Lox.Ast
       Lox.Cli
       Lox.Lox
+      Lox.Parser
       Lox.Scanner
   other-modules:
       Paths_htreelox
