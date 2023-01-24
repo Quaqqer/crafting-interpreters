@@ -31,7 +31,10 @@ default-extensions: [
     RecordWildCards,
     TupleSections,
     ViewPatterns,
-    # OverloadedRecordDot,
+    OverloadedRecordDot,
+    OverloadedRecordUpdate,
+    NoFieldSelectors,
+    ScopedTypeVariables,
   ]
 
 library:
