@@ -1,11 +1,13 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Lox.Parser () where
+module Lox.Parser (spec) where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
+import Data.List qualified as List
 import Data.Set (Set)
 import Data.Set qualified as Set
+import Test.Hspec
 import Prelude hiding (take, takeWhile)
 
 data ParserState t = ParserState
@@ -19,17 +21,37 @@ data ParseError t = BasicError
     got :: Maybe (ErrorItem t),
     expected :: Set (ErrorItem t)
   }
-  deriving (Show)
 
 data ErrorItem t
   = Tokens [t]
   | Label String
-  deriving (Show)
+  deriving (Ord, Eq)
+
+instance Show t => Show (ErrorItem t) where
+  show (Tokens ts) = concatMap show ts
+  show (Label l) = l
+
+showParseError :: Show t => ParseError t -> String
+showParseError BasicError {got, expected} =
+  let msg = case got of
+        Nothing -> case Set.toList expected of
+          [] -> Nothing
+          [e] -> Just ("expected " ++ show e)
+          es -> Just ("expected one of " ++ List.intercalate ", " (map show es))
+        Just got -> case Set.toList expected of
+          [] -> Just ("got " ++ show got)
+          [e] -> Just ("expected " ++ show e ++ ", got " ++ show got)
+          es -> Just ("expected one of " ++ List.intercalate ", " (map show es) ++ ", got" ++ show got)
+   in case msg of
+        Nothing -> "Parse error"
+        Just msg -> "Parse error: " ++ msg
+
+type ParseResult t a = Either (ParseError t, ParserState t) (a, ParserState t)
 
 newtype Parser' t a = Parser
   { run ::
       ParserState t ->
-      Either (ParseError t, ParserState t) (a, ParserState t)
+      ParseResult t a
   }
 
 parse :: Parser' t a -> [t] -> Either (ParseError t) a
@@ -68,7 +90,7 @@ instance Monad (Parser' t) where
 
   return = pure
 
-instance Alternative (Parser' t) where
+instance Ord t => Alternative (Parser' t) where
   empty =
     Parser
       ( \state ->
@@ -86,25 +108,21 @@ instance Alternative (Parser' t) where
     Parser
       ( \state -> case l.run state of
           Right ok -> Right ok
-          Left _e1 -> case r.run state of
+          Left (lErr, lState) -> case r.run state of
             Right ok -> Right ok
-            Left e2 -> Left e2
+            Left (rErr, rState) ->
+              Left
+                ( if
+                      | lErr.offset == rErr.offset -> (mergeErr lErr rErr, lState)
+                      | lErr.offset < rErr.offset -> (rErr, rState)
+                      | otherwise -> (lErr, lState)
+                )
       )
-
--- where
---
--- mergeErr
---   (ParseExpected lEx, s1)
---   (ParseExpected rEx, s2) =
---     if s1.offset == s2.offset
---       then (ParseExpected (lEx ++ rEx), s1)
---       else firstErr (ParseExpected lEx, s1) (ParseExpected rEx, s2)
--- mergeErr lErr sErr = firstErr lErr sErr
---
--- firstErr (e1, s1) (e2, s2) =
---   if s1.offset >= s2.offset
---     then (e1, s1)
---     else (e2, s2)
+    where
+      mergeErr l r =
+        if l.offset == r.offset && l.got == r.got
+          then l {expected = l.expected `Set.union` r.expected}
+          else error "Assertion of same lengths failed"
 
 infix 0 <?>
 
@@ -194,9 +212,7 @@ lookAhead parser =
     )
 
 string :: Eq t => [t] -> Parser' t [t]
-string [] = pure []
-string (s : ss) = do
-  (:) <$> char s <*> string ss
+string = foldr (\c -> (<*>) ((:) <$> char c)) (pure [])
 
 eof :: Parser' Char ()
 eof =
@@ -215,3 +231,19 @@ eof =
 
 getState :: Parser' t (ParserState t)
 getState = Parser (\state -> Right (state, state))
+
+shouldParse :: Show t => Show a => Eq a => ParseResult t a -> a -> Expectation
+shouldParse (Left (err, state)) expected =
+  expectationFailure
+    ("expected: " ++ show expected ++ "\nbut parsing failed with error:\n" ++ showParseError err)
+shouldParse (Right (l, _)) r = l `shouldBe` r
+
+shouldSucceedOn :: Show t => ([t] -> Either (ParseError t) a) -> [t] -> Expectation
+shouldSucceedOn parse tokens = case parse tokens of
+  Left err -> expectationFailure ("parsing failed with error:\n" ++ showParseError err)
+  Right _ -> return ()
+
+spec :: Spec
+spec = describe "Lox.Parser" $ do
+  it "parses empty input" $ do
+    parse eof `shouldSucceedOn` []

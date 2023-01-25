@@ -45,10 +45,12 @@ library
       FlexibleContexts
       FlexibleInstances
       ImportQualifiedPost
+      QuantifiedConstraints
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing
   build-depends:
       base >=4.7 && <5
     , containers
+    , hspec
     , optparse-applicative
   default-language: Haskell2010
 
@@ -74,10 +76,12 @@ executable htreelox
       FlexibleContexts
       FlexibleInstances
       ImportQualifiedPost
+      QuantifiedConstraints
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
     , containers
+    , hspec
     , htreelox
     , optparse-applicative
   default-language: Haskell2010
@@ -105,10 +109,12 @@ test-suite htreelox-test
       FlexibleContexts
       FlexibleInstances
       ImportQualifiedPost
+      QuantifiedConstraints
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
     , containers
+    , hspec
     , htreelox
     , optparse-applicative
   default-language: Haskell2010

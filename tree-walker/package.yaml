@@ -10,6 +10,7 @@ dependencies:
   - base >= 4.7 && < 5
   - containers
   - optparse-applicative
+  - hspec
 
 ghc-options:
   - -Wall
@@ -34,6 +35,7 @@ default-extensions:
     FlexibleContexts,
     FlexibleInstances,
     ImportQualifiedPost,
+    QuantifiedConstraints,
   ]
 
 library:

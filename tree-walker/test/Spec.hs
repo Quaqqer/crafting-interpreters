@@ -1,2 +1,6 @@
+import Test.Hspec
+import Lox.Parser qualified
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = hspec $ do
+  Lox.Parser.spec
