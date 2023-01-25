@@ -9,9 +9,10 @@
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = [ pkgs.bashInteractive ];
           buildInputs = with pkgs; [
-            (haskell-language-server.override {
-              supportedGhcVersions = [ "925" ];
-            })
+            haskell.packages.ghc925.haskell-language-server
+            # (haskell-language-server.override {
+            #   supportedGhcVersions = [ "925" ];
+            # })
             stack
             ormolu
             hlint

@@ -1,7 +1,11 @@
-module Lox.Parser where
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
+
+module Lox.Parser () where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Prelude hiding (take, takeWhile)
 
 data ParserState t = ParserState
@@ -10,12 +14,16 @@ data ParserState t = ParserState
   }
   deriving (Show)
 
-data ParseError t
-  = ParseEOF
-  | ParseUnexpectedChar [t]
-  | ParseUnknownErr
-  | ParseExpected [String]
-  | ParseExpectedEOF
+data ParseError t = BasicError
+  { offset :: Int,
+    got :: Maybe (ErrorItem t),
+    expected :: Set (ErrorItem t)
+  }
+  deriving (Show)
+
+data ErrorItem t
+  = Tokens [t]
+  | Label String
   deriving (Show)
 
 newtype Parser' t a = Parser
@@ -61,29 +69,42 @@ instance Monad (Parser' t) where
   return = pure
 
 instance Alternative (Parser' t) where
-  empty = Parser (\state -> Left (ParseUnknownErr, state))
+  empty =
+    Parser
+      ( \state ->
+          Left
+            ( BasicError
+                { offset = state.offset,
+                  got = Nothing,
+                  expected = Set.empty
+                },
+              state
+            )
+      )
 
   l <|> r =
     Parser
       ( \state -> case l.run state of
           Right ok -> Right ok
-          Left e1 -> case r.run state of
+          Left _e1 -> case r.run state of
             Right ok -> Right ok
-            Left e2 -> Left (mergeErr e1 e2)
+            Left e2 -> Left e2
       )
-    where
-      mergeErr
-        (ParseExpected lEx, s1)
-        (ParseExpected rEx, s2) =
-          if s1.offset == s2.offset
-            then (ParseExpected (lEx ++ rEx), s1)
-            else firstErr (ParseExpected lEx, s1) (ParseExpected rEx, s2)
-      mergeErr lErr sErr = firstErr lErr sErr
 
-      firstErr (e1, s1) (e2, s2) =
-        if s1.offset >= s2.offset
-          then (e1, s1)
-          else (e2, s2)
+-- where
+--
+-- mergeErr
+--   (ParseExpected lEx, s1)
+--   (ParseExpected rEx, s2) =
+--     if s1.offset == s2.offset
+--       then (ParseExpected (lEx ++ rEx), s1)
+--       else firstErr (ParseExpected lEx, s1) (ParseExpected rEx, s2)
+-- mergeErr lErr sErr = firstErr lErr sErr
+--
+-- firstErr (e1, s1) (e2, s2) =
+--   if s1.offset >= s2.offset
+--     then (e1, s1)
+--     else (e2, s2)
 
 infix 0 <?>
 
@@ -91,7 +112,9 @@ infix 0 <?>
 parser <?> s =
   Parser
     ( \state -> case parser.run state of
-        Left (_, state') -> Left (ParseExpected [s], state')
+        Left (_, state') ->
+          Left
+            (BasicError state.offset Nothing (Set.singleton (Label s)), state')
         Right r -> Right r
     )
 
@@ -99,7 +122,7 @@ satisfy :: (t -> Bool) -> Parser' t t
 satisfy predicate =
   Parser
     ( \state@ParserState {rest, offset} -> case rest of
-        [] -> Left (ParseEOF, state)
+        [] -> Left (BasicError offset (Just (Label "eof")) Set.empty, state)
         (c : cs) ->
           if predicate c
             then
@@ -110,14 +133,28 @@ satisfy predicate =
                       offset = offset + 1
                     }
                 )
-            else Left (ParseUnexpectedChar [c], state)
+            else Left (BasicError offset (Just (Tokens [c])) Set.empty, state)
     )
 
-take :: Parser' Char Char
-take = satisfy (const True)
+token :: (t -> Bool) -> (Int -> Maybe t -> ParseError t) -> Parser' t t
+token pred mkErr =
+  Parser
+    ( \state -> case state.rest of
+        [] -> Left (mkErr state.offset Nothing, state)
+        (c : cs) ->
+          if pred c
+            then Right (c, state {offset = state.offset + 1, rest = cs})
+            else Left (mkErr state.offset (Just c), state)
+    )
 
-char :: Char -> Parser' Char Char
-char c = satisfy (== c)
+char :: Eq t => t -> Parser' t t
+char c =
+  token
+    (== c)
+    ( \offset got -> case got of
+        Nothing -> BasicError offset (Just (Label "eof")) (Set.singleton (Tokens [c]))
+        Just got -> BasicError offset (Just (Tokens [got])) (Set.singleton (Tokens [c]))
+    )
 
 optional :: Parser' t a -> Parser' t (Maybe a)
 optional parser =
@@ -154,7 +191,7 @@ lookAhead parser =
         Right (a, _) -> Right (a, state)
     )
 
-string :: String -> Parser' Char String
+string :: Eq t => [t] -> Parser' t [t]
 string [] = pure []
 string (s : ss) = do
   (:) <$> char s <*> string ss
@@ -164,7 +201,14 @@ eof =
   Parser
     ( \state@ParserState {rest} -> case rest of
         [] -> Right ((), state)
-        _ -> Left (ParseExpectedEOF, state)
+        (c : _) ->
+          Left
+            ( BasicError
+                state.offset
+                (Just (Tokens [c]))
+                (Set.singleton (Label "eof")),
+              state
+            )
     )
 
 getState :: Parser' t (ParserState t)
