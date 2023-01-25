@@ -294,3 +294,14 @@ spec = describe "Lox.Parser" $ do
       )
       "aaaa"
       `shouldFailWithError` "got eof but expected 'b'"
+
+    parse
+      ( string "aa"
+          >> ( string "aab"
+                 <|> (List.singleton <$> (many (char 'a') >> char 'b'))
+                 <|> string "aab"
+             )
+          <?> "test"
+      )
+      "aaaaaac"
+      `shouldFailWithError` "got 'a' but expected test"
