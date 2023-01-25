@@ -5,7 +5,7 @@ module Lox.Parser () where
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
 import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.Set qualified as Set
 import Prelude hiding (take, takeWhile)
 
 data ParserState t = ParserState
@@ -32,8 +32,8 @@ newtype Parser' t a = Parser
       Either (ParseError t, ParserState t) (a, ParserState t)
   }
 
-runParser :: Parser' t a -> [t] -> Either (ParseError t) a
-runParser parser source =
+parse :: Parser' t a -> [t] -> Either (ParseError t) a
+parse parser source =
   case parser.run
     ( ParserState
         { rest = source,
@@ -121,8 +121,8 @@ parser <?> s =
 satisfy :: (t -> Bool) -> Parser' t t
 satisfy predicate =
   Parser
-    ( \state@ParserState {rest, offset} -> case rest of
-        [] -> Left (BasicError offset (Just (Label "eof")) Set.empty, state)
+    ( \state -> case state.rest of
+        [] -> Left (BasicError state.offset (Just (Label "eof")) Set.empty, state)
         (c : cs) ->
           if predicate c
             then
@@ -130,10 +130,10 @@ satisfy predicate =
                 ( c,
                   state
                     { rest = cs,
-                      offset = offset + 1
+                      offset = state.offset + 1
                     }
                 )
-            else Left (BasicError offset (Just (Tokens [c])) Set.empty, state)
+            else Left (BasicError state.offset (Just (Tokens [c])) Set.empty, state)
     )
 
 token :: (t -> Bool) -> (Int -> Maybe t -> ParseError t) -> Parser' t t
@@ -170,7 +170,9 @@ many parser =
     ( \state -> case parser.run state of
         Right (a, state') -> Right (a : as, state'')
           where
-            Right (as, state'') = (many parser).run state'
+            (as, state'') = case (many parser).run state' of
+              Left _ -> error "Assertion that many always returns a right failed"
+              Right r -> r
         Left _ -> Right ([], state)
     )
 
@@ -199,7 +201,7 @@ string (s : ss) = do
 eof :: Parser' Char ()
 eof =
   Parser
-    ( \state@ParserState {rest} -> case rest of
+    ( \state -> case state.rest of
         [] -> Right ((), state)
         (c : _) ->
           Left

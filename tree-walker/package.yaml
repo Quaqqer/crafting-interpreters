@@ -33,6 +33,7 @@ default-extensions:
     ScopedTypeVariables,
     FlexibleContexts,
     FlexibleInstances,
+    ImportQualifiedPost,
   ]
 
 library:

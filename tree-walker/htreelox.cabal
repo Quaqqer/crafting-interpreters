@@ -44,6 +44,7 @@ library
       ScopedTypeVariables
       FlexibleContexts
       FlexibleInstances
+      ImportQualifiedPost
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing
   build-depends:
       base >=4.7 && <5
@@ -72,6 +73,7 @@ executable htreelox
       ScopedTypeVariables
       FlexibleContexts
       FlexibleInstances
+      ImportQualifiedPost
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -102,6 +104,7 @@ test-suite htreelox-test
       ScopedTypeVariables
       FlexibleContexts
       FlexibleInstances
+      ImportQualifiedPost
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
