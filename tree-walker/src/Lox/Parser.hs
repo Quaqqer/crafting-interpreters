@@ -5,6 +5,7 @@ module Lox.Parser (spec) where
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
 import Data.List qualified as List
+import Data.Maybe qualified
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Test.Hspec
@@ -40,11 +41,9 @@ showParseError BasicError {got, expected} =
           es -> Just ("expected one of " ++ List.intercalate ", " (map show es))
         Just got -> case Set.toList expected of
           [] -> Just ("got " ++ show got)
-          [e] -> Just ("expected " ++ show e ++ ", got " ++ show got)
-          es -> Just ("expected one of " ++ List.intercalate ", " (map show es) ++ ", got" ++ show got)
-   in case msg of
-        Nothing -> "Parse error"
-        Just msg -> "Parse error: " ++ msg
+          [e] -> Just ("got " ++ show got ++ " but expected " ++ show e)
+          es -> Just ("got " ++ show got ++ " but expected one of " ++ List.intercalate ", " (map show es))
+   in Data.Maybe.fromMaybe "Unknown parse error" msg
 
 type ParseResult t a = Either (ParseError t, ParserState t) (a, ParserState t)
 
@@ -130,11 +129,15 @@ infix 0 <?>
 parser <?> s =
   Parser
     ( \state -> case parser.run state of
-        Left (_, state') ->
-          Left
-            (BasicError state.offset Nothing (Set.singleton (Label s)), state')
+        Left (err, state') ->
+          let ts = List.take (err.offset - state'.offset + 1) state.rest
+           in Left
+                (BasicError state.offset (Just (Tokens ts)) (Set.singleton (Label s)), state')
         Right r -> Right r
     )
+
+label :: String -> Parser' t a -> Parser' t a
+label l parser = parser <?> l
 
 satisfy :: (t -> Bool) -> Parser' t t
 satisfy predicate =
@@ -232,18 +235,62 @@ eof =
 getState :: Parser' t (ParserState t)
 getState = Parser (\state -> Right (state, state))
 
-shouldParse :: Show t => Show a => Eq a => ParseResult t a -> a -> Expectation
-shouldParse (Left (err, state)) expected =
+shouldParse :: Show t => Show a => Eq a => Either (ParseError t) a -> a -> Expectation
+shouldParse (Right l) r = l `shouldBe` r
+shouldParse (Left err) expected =
   expectationFailure
     ("expected: " ++ show expected ++ "\nbut parsing failed with error:\n" ++ showParseError err)
-shouldParse (Right (l, _)) r = l `shouldBe` r
 
 shouldSucceedOn :: Show t => ([t] -> Either (ParseError t) a) -> [t] -> Expectation
 shouldSucceedOn parse tokens = case parse tokens of
   Left err -> expectationFailure ("parsing failed with error:\n" ++ showParseError err)
   Right _ -> return ()
 
+shouldFailOn :: Show a => Show t => ([t] -> Either (ParseError t) a) -> [t] -> Expectation
+shouldFailOn parse tokens = case parse tokens of
+  Right v -> expectationFailure ("parse was expected to fail but parsed:\n" ++ show v)
+  Left _ -> return ()
+
+shouldFailWithError :: Show t => Show a => Eq a => Either (ParseError t) a -> String -> Expectation
+shouldFailWithError (Right v) _ = expectationFailure ("parse was expected to fail but parsed:\n" ++ show v)
+shouldFailWithError (Left err) expected = showParseError err `shouldBe` expected
+
 spec :: Spec
 spec = describe "Lox.Parser" $ do
   it "parses empty input" $ do
     parse eof `shouldSucceedOn` []
+    parse eof [] `shouldParse` ()
+
+    parse eof `shouldFailOn` "a"
+
+  it "parses single characters correctly" $ do
+    parse (char 'a') "a" `shouldParse` 'a'
+    parse (char 'b') "a" `shouldFailWithError` "got 'a' but expected 'b'"
+
+  it "parses (many parser) correctly" $ do
+    parse (many (char 'a')) "aaab" `shouldParse` "aaa"
+    parse (many (char 'b')) "aaab" `shouldParse` ""
+
+  it "parses (some parser) correctly" $ do
+    parse (some (char 'a')) "aaab" `shouldParse` "aaa"
+    parse (some (char 'b')) "aaab" `shouldFailWithError` "got 'a' but expected 'b'"
+
+  it "fails correctly with labels" $ do
+    parse (char 'a' <?> "character a") "b"
+      `shouldFailWithError` "got 'b' but expected character a"
+
+  it "parses alternatives correctly" $ do
+    parse (many (char 'a' <|> char 'b' <|> char 'c')) "abcabb" `shouldParse` "abcabb"
+    parse (char 'a' <|> char 'b' <|> char 'c') "x"
+      `shouldFailWithError` "got 'x' but expected one of 'a', 'b', 'c'"
+    parse (char 'a' <|> char 'b' <|> char 'c' <?> "chars") "x"
+      `shouldFailWithError` "got 'x' but expected chars"
+
+  it "gets the deepest error" $ do
+    parse
+      ( string "aab"
+          <|> (List.singleton <$> (many (char 'a') >> char 'b'))
+          <|> string "aab"
+      )
+      "aaaa"
+      `shouldFailWithError` "got eof but expected 'b'"
