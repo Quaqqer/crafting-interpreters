@@ -17,6 +17,14 @@ data ParserState t = ParserState
   }
   deriving (Show)
 
+data ErrorBundle t = ErrorBundle
+  { source :: [t],
+    fileName :: Maybe String,
+    line :: Int,
+    column :: Int,
+    error :: ParseError t
+  }
+
 data ParseError t = BasicError
   { offset :: Int,
     got :: Maybe (ErrorItem t),
@@ -62,6 +70,26 @@ parse parser source =
         }
     ) of
     Left (err, _state) -> Left err
+    Right (a, _state) -> Right a
+
+parseFile :: Parser' t a -> [t] -> Maybe String -> Either (ErrorBundle t) a
+parseFile parser source fileName =
+  case parser.run
+    ( ParserState
+        { rest = source,
+          offset = 0
+        }
+    ) of
+    Left (error, _state) ->
+      Left
+        ( ErrorBundle
+            { source,
+              error,
+              line = 0,
+              column = 0,
+              fileName
+            }
+        )
     Right (a, _state) -> Right a
 
 instance Functor (Parser' t) where
