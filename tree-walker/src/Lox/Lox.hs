@@ -4,6 +4,7 @@ module Lox.Lox (runFile, runPrompt, defaultState) where
 
 import GHC.Base (when)
 import GHC.IO.Exception (ExitCode (ExitFailure))
+import Lox.Parser (parse)
 import Lox.Scanner (scanTokens)
 import System.Exit (exitWith)
 import System.IO (hFlush, isEOF, stdout)
@@ -35,7 +36,7 @@ runPrompt state = do
 
 run :: State -> String -> IO State
 run state source = do
-  let tokens = scanTokens source
+  let tokens = parse scanTokens source
 
   mapM_ print tokens
 

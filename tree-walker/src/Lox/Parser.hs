@@ -1,6 +1,35 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Lox.Parser (spec) where
+module Lox.Parser
+  ( Parser' (..),
+    ParserState(..),
+    ErrorBundle (..),
+    ParseError (..),
+    ErrorItem (..),
+    showParseError,
+    parse,
+    parseFile,
+    (<?>),
+    label,
+    satisfy,
+    token,
+    char,
+    optional,
+    many,
+    some,
+    takeWhile,
+    lookAhead,
+    notFollowedBy,
+    string,
+    eof,
+    getState,
+    shouldParse,
+    shouldSucceedOn,
+    shouldFailOn,
+    shouldFailWithError,
+    spec,
+  )
+where
 
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
@@ -10,6 +39,12 @@ import Data.Set (Set)
 import Data.Set qualified as Set
 import Test.Hspec
 import Prelude hiding (take, takeWhile)
+
+newtype Parser' t a = Parser
+  { run ::
+      ParserState t ->
+      ParseResult t a
+  }
 
 data ParserState t = ParserState
   { rest :: [t],
@@ -48,18 +83,12 @@ showParseError BasicError {got, expected} =
           [e] -> Just ("expected " ++ show e)
           es -> Just ("expected one of " ++ List.intercalate ", " (map show es))
         Just got -> case Set.toList expected of
-          [] -> Just ("got " ++ show got)
+          [] -> Just ("unexpected " ++ show got)
           [e] -> Just ("got " ++ show got ++ " but expected " ++ show e)
           es -> Just ("got " ++ show got ++ " but expected one of " ++ List.intercalate ", " (map show es))
    in Data.Maybe.fromMaybe "Unknown parse error" msg
 
 type ParseResult t a = Either (ParseError t, ParserState t) (a, ParserState t)
-
-newtype Parser' t a = Parser
-  { run ::
-      ParserState t ->
-      ParseResult t a
-  }
 
 parse :: Parser' t a -> [t] -> Either (ParseError t) a
 parse parser source =
@@ -168,21 +197,15 @@ label :: String -> Parser' t a -> Parser' t a
 label l parser = parser <?> l
 
 satisfy :: (t -> Bool) -> Parser' t t
-satisfy predicate =
-  Parser
-    ( \state -> case state.rest of
-        [] -> Left (BasicError state.offset (Just (Label "eof")) Set.empty, state)
-        (c : cs) ->
-          if predicate c
-            then
-              Right
-                ( c,
-                  state
-                    { rest = cs,
-                      offset = state.offset + 1
-                    }
-                )
-            else Left (BasicError state.offset (Just (Tokens [c])) Set.empty, state)
+satisfy pred =
+  token
+    pred
+    ( \offset got ->
+        BasicError
+          { offset,
+            got = Tokens . List.singleton <$> got,
+            expected = Set.empty
+          }
     )
 
 token :: (t -> Bool) -> (Int -> Maybe t -> ParseError t) -> Parser' t t
@@ -241,6 +264,12 @@ lookAhead parser =
         Left err -> Left err
         Right (a, _) -> Right (a, state)
     )
+
+notFollowedBy :: Parser' t a -> Parser' t ()
+notFollowedBy parser =
+  Parser (\state -> case parser.run state of
+    Left _ -> Right ((), state)
+    Right (_, state) -> Left (BasicError state.offset Nothing Set.empty, state))
 
 string :: Eq t => [t] -> Parser' t [t]
 string = foldr (\c -> (<*>) ((:) <$> char c)) (pure [])
