@@ -5,6 +5,8 @@ import Lox.Token (Token)
 data Value
   = Number Double
   | String String
+  | Boolean Bool
+  | Nil
 
 data Expression
   = Binary {lhs :: Expression, operator :: Token, rhs :: Expression}
