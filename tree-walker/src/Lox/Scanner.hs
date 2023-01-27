@@ -1,7 +1,5 @@
 module Lox.Scanner
-  ( Token (..),
-    WithPos (..),
-    Scanner,
+  ( Scanner,
     scanTokens,
     spec,
   )
@@ -10,63 +8,11 @@ where
 import Control.Applicative (Alternative ((<|>)))
 import Data.Char (isAlpha, isAlphaNum, isDigit)
 import Data.Functor (($>))
-import Data.List (singleton)
 import Data.Maybe (fromMaybe)
 import Lox.Parser hiding (spec)
+import Lox.Token
 import Test.Hspec
 import Prelude hiding (take, takeWhile)
-import Control.Monad (foldM)
-
-data Token
-  = LeftParen
-  | RightParen
-  | LeftBrace
-  | RightBrace
-  | Comma
-  | Dot
-  | Minus
-  | Plus
-  | Semicolon
-  | Slash
-  | Star
-  | Bang
-  | BangEqual
-  | Equal
-  | EqualEqual
-  | Greater
-  | GreaterEqual
-  | Less
-  | LessEqual
-  | Identifier String
-  | String String
-  | Number Double
-  | And
-  | Class
-  | Else
-  | FFalse
-  | Fun
-  | For
-  | If
-  | Nil
-  | Or
-  | Print
-  | Return
-  | Super
-  | This
-  | TTrue
-  | Var
-  | While
-  | EOF
-  deriving (Show, Eq, Ord)
-
-data WithPos a = WithPos
-  { start :: Int,
-    end :: Int,
-    inner :: a
-  }
-
-instance Show a => Show (WithPos a) where
-  show WithPos {inner} = show inner
 
 type Scanner = Parser' Char
 
@@ -254,6 +200,8 @@ spec = do
       parse scanToken "true" `shouldParseToken` TTrue
       parse scanToken "var" `shouldParseToken` Var
       parse scanToken "while" `shouldParseToken` While
+
+      parse scanTokens "while while" `shouldParseTokens` [While, While]
 
     it "tokenizes strings" $ do
       parse scanToken "\"hello there\"" `shouldParseToken` String "hello there"

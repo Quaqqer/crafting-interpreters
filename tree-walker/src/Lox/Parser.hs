@@ -2,7 +2,7 @@
 
 module Lox.Parser
   ( Parser' (..),
-    ParserState(..),
+    ParserState (..),
     ErrorBundle (..),
     ParseError (..),
     ErrorItem (..),
@@ -71,8 +71,8 @@ data ErrorItem t
   | Label String
   deriving (Ord, Eq)
 
-instance Show t => Show (ErrorItem t) where
-  show (Tokens ts) = concatMap show ts
+instance forall t. Show t => Show (ErrorItem t) where
+  show (Tokens ts) = show ts
   show (Label l) = l
 
 showParseError :: Show t => ParseError t -> String
@@ -199,34 +199,27 @@ label l parser = parser <?> l
 satisfy :: (t -> Bool) -> Parser' t t
 satisfy pred =
   token
-    pred
-    ( \offset got ->
-        BasicError
-          { offset,
-            got = Tokens . List.singleton <$> got,
-            expected = Set.empty
-          }
-    )
+    (\t -> if pred t then Just t else Nothing)
+    Set.empty
 
-token :: (t -> Bool) -> (Int -> Maybe t -> ParseError t) -> Parser' t t
-token pred mkErr =
+token :: (t -> Maybe a) -> Set (ErrorItem t) -> Parser' t a
+token test expected =
   Parser
     ( \state -> case state.rest of
-        [] -> Left (mkErr state.offset Nothing, state)
+        [] -> Left (BasicError {got = Just (Label "eof"), expected, offset = state.offset}, state)
         (c : cs) ->
-          if pred c
-            then Right (c, state {offset = state.offset + 1, rest = cs})
-            else Left (mkErr state.offset (Just c), state)
+          case test c of
+            Just a ->
+              Right (a, state {offset = state.offset + 1, rest = cs})
+            Nothing ->
+              Left (BasicError {got = Just (Tokens [c]), expected, offset = state.offset + 1}, state)
     )
 
 char :: Eq t => t -> Parser' t t
 char c =
   token
-    (== c)
-    ( \offset got -> case got of
-        Nothing -> BasicError offset (Just (Label "eof")) (Set.singleton (Tokens [c]))
-        Just got -> BasicError offset (Just (Tokens [got])) (Set.singleton (Tokens [c]))
-    )
+    (\t -> if c == t then Just t else Nothing)
+    (Set.singleton (Tokens [c]))
 
 optional :: Parser' t a -> Parser' t (Maybe a)
 optional parser =
@@ -267,9 +260,11 @@ lookAhead parser =
 
 notFollowedBy :: Parser' t a -> Parser' t ()
 notFollowedBy parser =
-  Parser (\state -> case parser.run state of
-    Left _ -> Right ((), state)
-    Right (_, state) -> Left (BasicError state.offset Nothing Set.empty, state))
+  Parser
+    ( \state -> case parser.run state of
+        Left _ -> Right ((), state)
+        Right (_, state) -> Left (BasicError state.offset Nothing Set.empty, state)
+    )
 
 string :: Eq t => [t] -> Parser' t [t]
 string = foldr (\c -> (<*>) ((:) <$> char c)) (pure [])
@@ -322,7 +317,7 @@ spec = describe "Lox.Parser" $ do
 
   it "parses single characters correctly" $ do
     parse (char 'a') "a" `shouldParse` 'a'
-    parse (char 'b') "a" `shouldFailWithError` "got 'a' but expected 'b'"
+    parse (char 'b') "a" `shouldFailWithError` "got \"a\" but expected \"b\""
 
   it "parses (many parser) correctly" $ do
     parse (many (char 'a')) "aaab" `shouldParse` "aaa"
@@ -330,18 +325,18 @@ spec = describe "Lox.Parser" $ do
 
   it "parses (some parser) correctly" $ do
     parse (some (char 'a')) "aaab" `shouldParse` "aaa"
-    parse (some (char 'b')) "aaab" `shouldFailWithError` "got 'a' but expected 'b'"
+    parse (some (char 'b')) "aaab" `shouldFailWithError` "got \"a\" but expected \"b\""
 
   it "fails correctly with labels" $ do
     parse (char 'a' <?> "character a") "b"
-      `shouldFailWithError` "got 'b' but expected character a"
+      `shouldFailWithError` "got \"b\" but expected character a"
 
   it "parses alternatives correctly" $ do
     parse (many (char 'a' <|> char 'b' <|> char 'c')) "abcabb" `shouldParse` "abcabb"
     parse (char 'a' <|> char 'b' <|> char 'c') "x"
-      `shouldFailWithError` "got 'x' but expected one of 'a', 'b', 'c'"
+      `shouldFailWithError` "got \"x\" but expected one of \"a\", \"b\", \"c\""
     parse (char 'a' <|> char 'b' <|> char 'c' <?> "chars") "x"
-      `shouldFailWithError` "got 'x' but expected chars"
+      `shouldFailWithError` "got \"x\" but expected chars"
 
   it "gets the deepest error" $ do
     parse
@@ -350,7 +345,7 @@ spec = describe "Lox.Parser" $ do
           <|> string "aab"
       )
       "aaaa"
-      `shouldFailWithError` "got eof but expected 'b'"
+      `shouldFailWithError` "got eof but expected \"b\""
 
     parse
       ( string "aa"
@@ -361,4 +356,4 @@ spec = describe "Lox.Parser" $ do
           <?> "test"
       )
       "aaaaaac"
-      `shouldFailWithError` "got 'a' but expected test"
+      `shouldFailWithError` "got \"aa\" but expected test"

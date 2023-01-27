@@ -23,8 +23,10 @@ library
       Lox.Ast
       Lox.Cli
       Lox.Lox
+      Lox.Parse
       Lox.Parser
       Lox.Scanner
+      Lox.Token
   other-modules:
       Paths_htreelox
   hs-source-dirs:

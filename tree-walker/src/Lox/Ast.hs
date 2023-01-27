@@ -1,8 +1,10 @@
 module Lox.Ast where
 
-import Lox.Scanner (Token (..))
+import Lox.Token (Token)
 
 data Value
+  = Number Double
+  | String String
 
 data Expression
   = Binary {lhs :: Expression, operator :: Token, rhs :: Expression}
