@@ -146,7 +146,7 @@ instance Monad (Parser' t) where
 
   return = pure
 
-instance Ord t => Alternative (Parser' t) where
+instance (Ord t, Show t) => Alternative (Parser' t) where
   empty =
     Parser
       ( \state ->
@@ -178,7 +178,7 @@ instance Ord t => Alternative (Parser' t) where
       mergeErr l r =
         if l.offset == r.offset && l.got == r.got
           then l {expected = l.expected `Set.union` r.expected}
-          else error "Assertion of same lengths failed"
+          else error (show l.expected ++ "<" ++ show l.got ++ ">, " ++ show r.expected ++ "<" ++ show r.got ++ "> " ++ "Assertion of same lengths failed")
 
 infix 0 <?>
 
@@ -206,7 +206,7 @@ token :: (t -> Maybe a) -> Set (ErrorItem t) -> Parser' t a
 token test expected =
   Parser
     ( \state -> case state.rest of
-        [] -> Left (BasicError {got = Just (Label "eof"), expected, offset = state.offset}, state)
+        [] -> Left (BasicError {got = Just (Tokens []), expected, offset = state.offset}, state)
         (c : cs) ->
           case test c of
             Just a ->

@@ -1,11 +1,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Lox.Lox (runFile, runPrompt, defaultState) where
+module Lox.Lox (runFile, runPrompt) where
 
 import GHC.Base (when)
 import GHC.IO.Exception (ExitCode (ExitFailure))
+import Lox.Interpreter (Interpreter (..), emptyState, interpretExpression, State(..))
 import Lox.Parse (expression)
-import Lox.Parser (parse, showParseError, eof)
+import Lox.Parser (eof, parse, showParseError)
 import Lox.Scanner (scanTokens)
 import Lox.Token (WithPos (inner))
 import System.Exit (exitWith)
@@ -14,7 +15,7 @@ import System.IO (hFlush, isEOF, stdout)
 runFile :: String -> IO ()
 runFile f = do
   source <- readFile f
-  newState <- run defaultState source
+  newState <- run emptyState source
 
   when (newState.hadError) $ do
     exitWith (ExitFailure 65)
@@ -34,7 +35,7 @@ runPrompt state = do
       newState <- run state line
 
       -- Loop
-      runPrompt newState {hadError = False}
+      runPrompt emptyState
 
 run :: State -> String -> IO State
 run state source = do
@@ -53,8 +54,14 @@ run state source = do
           putStrLn (showParseError err)
           return state
         Right ast -> do
-          print ast
-          return state
+          let res = (interpretExpression ast).run state
+          case res of
+            Right (val, state) -> do
+              print val
+              return state
+            Left (err, _) -> do
+              print err
+              return state
 
 printErr :: Int -> String -> IO ()
 printErr line message = report line "" message
@@ -69,10 +76,3 @@ report line where_ message =
         ++ ": "
         ++ message
     )
-
-data State = State
-  { hadError :: Bool
-  }
-
-defaultState :: State
-defaultState = State {hadError = False}

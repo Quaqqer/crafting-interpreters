@@ -22,6 +22,7 @@ library
   exposed-modules:
       Lox.Ast
       Lox.Cli
+      Lox.Interpreter
       Lox.Lox
       Lox.Parse
       Lox.Parser
@@ -48,6 +49,8 @@ library
       FlexibleInstances
       ImportQualifiedPost
       QuantifiedConstraints
+      StandaloneDeriving
+      DeriveFunctor
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing
   build-depends:
       base >=4.7 && <5
@@ -79,6 +82,8 @@ executable htreelox
       FlexibleInstances
       ImportQualifiedPost
       QuantifiedConstraints
+      StandaloneDeriving
+      DeriveFunctor
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -112,6 +117,8 @@ test-suite htreelox-test
       FlexibleInstances
       ImportQualifiedPost
       QuantifiedConstraints
+      StandaloneDeriving
+      DeriveFunctor
   ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5

@@ -1,6 +1,7 @@
 module Lox.Cli (cli) where
 
-import Lox.Lox (runFile, runPrompt, defaultState)
+import Lox.Lox (runFile, runPrompt)
+import Lox.Interpreter (emptyState)
 import Options.Applicative
 
 data Options = Options
@@ -27,4 +28,4 @@ cli = do
     Just f -> do
       runFile f
     Nothing -> do
-      runPrompt defaultState
+      runPrompt emptyState

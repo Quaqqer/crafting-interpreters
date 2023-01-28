@@ -86,8 +86,9 @@ eString =
 
 bool :: Parser Ast.Expression
 bool =
-  char T.TTrue $> Ast.Literal (Ast.Boolean True)
-    <|> char T.FFalse $> Ast.Literal (Ast.Boolean False)
+  ((char T.TTrue $> Ast.Literal (Ast.Boolean True))
+    <|> (char T.FFalse $> Ast.Literal (Ast.Boolean False)))
+      <?> "boolean"
 
 nil :: Parser Ast.Expression
 nil = char T.Nil $> Ast.Literal Ast.Nil <?> "nil"

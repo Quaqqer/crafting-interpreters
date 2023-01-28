@@ -36,6 +36,8 @@ default-extensions:
     FlexibleInstances,
     ImportQualifiedPost,
     QuantifiedConstraints,
+    StandaloneDeriving,
+    DeriveFunctor,
   ]
 
 library:

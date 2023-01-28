@@ -1,7 +1,5 @@
 module Lox.Ast where
 
-import Lox.Token (Token)
-
 data Value
   = Number Double
   | String String
