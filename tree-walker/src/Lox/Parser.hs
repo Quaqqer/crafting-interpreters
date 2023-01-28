@@ -269,7 +269,7 @@ notFollowedBy parser =
 string :: Eq t => [t] -> Parser' t [t]
 string = foldr (\c -> (<*>) ((:) <$> char c)) (pure [])
 
-eof :: Parser' Char ()
+eof :: Parser' t ()
 eof =
   Parser
     ( \state -> case state.rest of
@@ -310,8 +310,8 @@ shouldFailWithError (Left err) expected = showParseError err `shouldBe` expected
 spec :: Spec
 spec = describe "Lox.Parser" $ do
   it "parses empty input" $ do
-    parse eof `shouldSucceedOn` []
-    parse eof [] `shouldParse` ()
+    parse eof `shouldSucceedOn` ""
+    parse eof "" `shouldParse` ()
 
     parse eof `shouldFailOn` "a"
 

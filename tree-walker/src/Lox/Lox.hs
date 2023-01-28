@@ -4,8 +4,10 @@ module Lox.Lox (runFile, runPrompt, defaultState) where
 
 import GHC.Base (when)
 import GHC.IO.Exception (ExitCode (ExitFailure))
-import Lox.Parser (parse)
+import Lox.Parse (expression)
+import Lox.Parser (parse, showParseError, eof)
 import Lox.Scanner (scanTokens)
+import Lox.Token (WithPos (inner))
 import System.Exit (exitWith)
 import System.IO (hFlush, isEOF, stdout)
 
@@ -36,11 +38,23 @@ runPrompt state = do
 
 run :: State -> String -> IO State
 run state source = do
-  let tokens = parse scanTokens source
-
-  mapM_ print tokens
-
-  return state
+  let tokens = parse (scanTokens <* eof) source
+  case tokens of
+    Left err -> do
+      putStrLn "Could not parse tokens:"
+      putStrLn (showParseError err)
+      return state
+    Right withPosTokens -> do
+      let tokens = map (.inner) withPosTokens
+      let ast = parse (expression <* eof) tokens
+      case ast of
+        Left err -> do
+          putStrLn "Could not parse tokens:"
+          putStrLn (showParseError err)
+          return state
+        Right ast -> do
+          print ast
+          return state
 
 printErr :: Int -> String -> IO ()
 printErr line message = report line "" message

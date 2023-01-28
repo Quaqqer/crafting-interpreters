@@ -7,9 +7,25 @@ data Value
   | String String
   | Boolean Bool
   | Nil
+  deriving (Show, Eq)
 
 data Expression
-  = Binary {lhs :: Expression, operator :: Token, rhs :: Expression}
+  = Binary {lhs :: Expression, operator :: Operator, rhs :: Expression}
   | Grouping {expr :: Expression}
   | Literal {value :: Value}
-  | Unary {operator :: Token, rhs :: Expression}
+  | Unary {operator :: Operator, rhs :: Expression}
+  deriving (Show, Eq)
+
+data Operator
+  = InEqual
+  | Equal
+  | Less
+  | LessEqual
+  | Greater
+  | GreaterEqual
+  | Minus
+  | Plus
+  | Multiplication
+  | Division
+  | Not
+  deriving (Show, Eq)

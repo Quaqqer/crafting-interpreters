@@ -1,20 +1,62 @@
-module Lox.Parse (expression) where
+module Lox.Parse (expression, spec) where
 
 import Control.Applicative ((<|>))
 import Data.Functor (($>))
 import Data.Set qualified as Set
 import Lox.Ast qualified as Ast
-import Lox.Parser
+import Lox.Parser hiding (spec)
 import Lox.Token qualified as T
+import Test.Hspec
 
 type Parser = Parser' T.Token
 
 expression :: Parser Ast.Expression
-expression =
-  literal
-    <|> unary
-    <|> binary
-    <|> grouping
+expression = equality <?> "expression"
+
+binaryExpr :: [T.Token] -> Parser Ast.Expression -> Parser Ast.Expression
+binaryExpr ops next =
+  let self =
+        ( do
+            lhs <- next
+            operator <- operators ops
+            rhs <- self
+            return Ast.Binary {lhs, operator, rhs}
+        )
+          <|> next
+   in self
+
+equality :: Parser Ast.Expression
+equality =
+  binaryExpr [T.BangEqual, T.EqualEqual] comparison
+    <?> "equality"
+
+comparison :: Parser Ast.Expression
+comparison =
+  binaryExpr [T.Less, T.LessEqual, T.Greater, T.GreaterEqual] term
+    <?> "comparison"
+
+term :: Parser Ast.Expression
+term =
+  binaryExpr [T.Minus, T.Plus] factor
+    <?> "term"
+
+factor :: Parser Ast.Expression
+factor =
+  binaryExpr [T.Star, T.Slash] unary
+    <?> "factor"
+
+unary :: Parser Ast.Expression
+unary =
+  ( do
+      operator <- operators [T.Minus, T.Bang]
+      rhs <- expression
+      return Ast.Unary {operator, rhs}
+  )
+    <|> primary
+    <?> "unary"
+
+primary :: Parser Ast.Expression
+primary = literal <|> grouping
 
 literal :: Parser Ast.Expression
 literal =
@@ -22,6 +64,7 @@ literal =
     <|> eString
     <|> bool
     <|> nil
+    <?> "literal"
 
 number :: Parser Ast.Expression
 number =
@@ -47,36 +90,7 @@ bool =
     <|> char T.FFalse $> Ast.Literal (Ast.Boolean False)
 
 nil :: Parser Ast.Expression
-nil = char T.Nil $> Ast.Literal Ast.Nil
-
-unary :: Parser Ast.Expression
-unary = do
-  operator <- char T.Minus <|> char T.Bang
-  rhs <- expression
-  return Ast.Unary {operator, rhs}
-
-binaryOperator :: Parser T.Token
-binaryOperator = foldl1 (<|>) (map char opTokens)
-  where
-    opTokens =
-      [ T.EqualEqual,
-        T.BangEqual,
-        T.Less,
-        T.LessEqual,
-        T.Greater,
-        T.GreaterEqual,
-        T.Plus,
-        T.Minus,
-        T.Star,
-        T.Slash
-      ]
-
-binary :: Parser Ast.Expression
-binary = do
-  lhs <- expression
-  operator <- binaryOperator
-  rhs <- expression
-  return Ast.Binary {lhs, operator, rhs}
+nil = char T.Nil $> Ast.Literal Ast.Nil <?> "nil"
 
 grouping :: Parser Ast.Expression
 grouping = do
@@ -84,3 +98,37 @@ grouping = do
   expr <- expression
   _ <- char T.RightParen
   return Ast.Grouping {expr}
+
+operators :: [T.Token] -> Parser Ast.Operator
+operators ts = tokenToOperator <$> foldl1 (<|>) (map char ts)
+
+tokenToOperator :: T.Token -> Ast.Operator
+tokenToOperator T.BangEqual = Ast.InEqual
+tokenToOperator T.EqualEqual = Ast.Equal
+tokenToOperator T.Less = Ast.Less
+tokenToOperator T.LessEqual = Ast.LessEqual
+tokenToOperator T.Greater = Ast.Greater
+tokenToOperator T.GreaterEqual = Ast.GreaterEqual
+tokenToOperator T.Minus = Ast.Minus
+tokenToOperator T.Plus = Ast.Plus
+tokenToOperator T.Star = Ast.Multiplication
+tokenToOperator T.Slash = Ast.Division
+tokenToOperator T.Bang = Ast.Not
+tokenToOperator _ = error "Unexpected operator"
+
+spec :: Spec
+spec = do
+  -- it "parses precedence correctly" $ do
+  describe "Lox.Parse" $ do
+    it "parses multiple of the same precedence correctly" $ do
+      parse (expression <* eof) [T.Number 0, T.Slash, T.Number 0, T.Slash, T.Number 0]
+        `shouldParse` Ast.Binary
+          { lhs = Ast.Literal (Ast.Number 0),
+            operator = Ast.Division,
+            rhs =
+              Ast.Binary
+                { lhs = Ast.Literal (Ast.Number 0),
+                  operator = Ast.Division,
+                  rhs = Ast.Literal (Ast.Number 0)
+                }
+          }
