@@ -58,7 +58,7 @@ iExpr Ast.Unary {operator, rhs} = case operator of
   _ -> error "Not a unary operator"
 iExpr expr@Ast.Binary {operator} =
   case operator of
-    Ast.Plus -> numberOp expr
+    Ast.Plus -> addOp expr
     Ast.Minus -> numberOp expr
     Ast.Multiplication -> numberOp expr
     Ast.Division -> numberOp expr
@@ -70,11 +70,20 @@ iExpr expr@Ast.Binary {operator} =
     Ast.InEqual -> eqOp expr
     _ -> error ("Operator " ++ show operator ++ " is not a binary operator")
   where
+    addOp Ast.Binary {lhs, operator = Ast.Plus, rhs} = do
+      l <- iExpr lhs
+      r <- iExpr rhs
+      ( case (l, r) of
+          (Ast.String l, Ast.String r) -> return (Ast.String (l ++ r))
+          (Ast.Number l, Ast.Number r) -> return (Ast.Number (l + r))
+          (_, _) -> err IncorrectType
+        )
+    addOp _ = error "Unexpected expression"
+
     numberOp Ast.Binary {lhs, operator, rhs} =
       Ast.Number <$> (op <$> iNumber lhs <*> iNumber rhs)
       where
         op = case operator of
-          Ast.Plus -> (+)
           Ast.Minus -> (-)
           Ast.Multiplication -> (*)
           Ast.Division -> (/)
@@ -108,4 +117,5 @@ iExpr expr@Ast.Binary {operator} =
 
 areEqual :: Ast.Value -> Ast.Value -> Interpreter Bool
 areEqual (Ast.Number lhs) (Ast.Number rhs) = return (lhs == rhs)
+areEqual (Ast.String lhs) (Ast.String rhs) = return (lhs == rhs)
 areEqual lhs rhs = (==) <$> getTruthy lhs <*> getTruthy rhs
