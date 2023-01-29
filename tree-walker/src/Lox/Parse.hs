@@ -38,23 +38,24 @@ declareStatement :: Parser Ast.Statement
 declareStatement = do
   _ <- char T.Var
   ident <- identifier
-  _ <- char T.Equal
-  maybeExpr <- optional expression
+  maybeExpr <- optional (char T.Equal *> expression)
   _ <- char T.Semicolon
   return Ast.DeclareStatement {ident, maybeExpr}
 
-assignExpression :: Parser Ast.Expression
-assignExpression =
-  do
-    ident <- identifier
-    _ <- char T.Equal
-    expr <- expression
-    _ <- char T.Semicolon
-    return Ast.Assign {ident, expr}
-    <?> "assignment expression"
-
 expression :: Parser Ast.Expression
-expression = assignExpression <|> equality <?> "expression"
+expression = assign <?> "expression"
+
+assign :: Parser Ast.Expression
+assign = do
+  let self =
+        ( do
+            ident <- identifier
+            _ <- char T.Equal
+            expr <- self
+            return Ast.Assign {ident, expr}
+        )
+          <|> equality
+   in self
 
 binaryExpr :: [T.Token] -> Parser Ast.Expression -> Parser Ast.Expression
 binaryExpr ops next = do
@@ -175,14 +176,15 @@ spec = do
   -- it "parses precedence correctly" $ do
   describe "Lox.Parse" $ do
     it "parses multiple of the same precedence correctly" $ do
-      parse (expression <* eof) [T.Number 0, T.Slash, T.Number 0, T.Slash, T.Number 0]
+      parse (expression <* eof) [T.Number 0, T.Slash, T.Number 1, T.Slash, T.Number 2]
         `shouldParse` Ast.Binary
-          { lhs = Ast.Literal (Ast.Number 0),
-            operator = Ast.Division,
-            rhs =
+          { lhs =
               Ast.Binary
                 { lhs = Ast.Literal (Ast.Number 0),
                   operator = Ast.Division,
-                  rhs = Ast.Literal (Ast.Number 0)
-                }
+                  rhs = Ast.Literal (Ast.Number 1)
+                },
+            operator = Ast.Division,
+            rhs =
+              Ast.Literal (Ast.Number 2)
           }
