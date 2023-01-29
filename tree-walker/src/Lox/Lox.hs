@@ -4,7 +4,7 @@ module Lox.Lox (runFile, runPrompt) where
 
 import GHC.Base (when)
 import GHC.IO.Exception (ExitCode (ExitFailure))
-import Lox.Interpreter (Interpreter (..), emptyState, interpretExpression, State(..))
+import Lox.Interpreter (Interpreter (..), emptyState, iExpr, State(..))
 import Lox.Parse (expression)
 import Lox.Parser (eof, parse, showParseError)
 import Lox.Scanner (scanTokens)
@@ -54,7 +54,7 @@ run state source = do
           putStrLn (showParseError err)
           return state
         Right ast -> do
-          let res = (interpretExpression ast).run state
+          let res = (iExpr ast).run state
           case res of
             Right (val, state) -> do
               print val

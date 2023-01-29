@@ -1,4 +1,4 @@
-module Lox.Interpreter (Interpreter (..), interpretExpression, emptyState, State (..)) where
+module Lox.Interpreter (Interpreter (..), iExpr, emptyState, State (..)) where
 
 import Control.Monad (ap, (>=>))
 import Lox.Ast qualified as Ast
@@ -44,30 +44,30 @@ getTruthy (Ast.Boolean b) = return b
 getTruthy _ = return True
 
 iNumber :: Ast.Expression -> Interpreter Double
-iNumber expr = interpretExpression expr >>= getNumber
+iNumber expr = iExpr expr >>= getNumber
 
 iBool :: Ast.Expression -> Interpreter Bool
-iBool expr = interpretExpression expr >>= getTruthy
+iBool expr = iExpr expr >>= getTruthy
 
-interpretExpression :: Ast.Expression -> Interpreter Ast.Value
-interpretExpression Ast.Literal {value} = return value
-interpretExpression Ast.Grouping {expr} = interpretExpression expr
-interpretExpression Ast.Unary {operator, rhs} = case operator of
-  Ast.Minus -> Ast.Number . negate <$> (interpretExpression rhs >>= getNumber)
-  Ast.Not -> Ast.Boolean . not <$> (interpretExpression rhs >>= getTruthy)
+iExpr :: Ast.Expression -> Interpreter Ast.Value
+iExpr Ast.Literal {value} = return value
+iExpr Ast.Grouping {expr} = iExpr expr
+iExpr Ast.Unary {operator, rhs} = case operator of
+  Ast.Minus -> Ast.Number . negate <$> (iExpr rhs >>= getNumber)
+  Ast.Not -> Ast.Boolean . not <$> (iExpr rhs >>= getTruthy)
   _ -> error "Not a unary operator"
-interpretExpression expr@Ast.Binary {operator} =
+iExpr expr@Ast.Binary {operator} =
   case operator of
     Ast.Plus -> numberOp expr
     Ast.Minus -> numberOp expr
     Ast.Multiplication -> numberOp expr
     Ast.Division -> numberOp expr
-    Ast.Equal -> boolOp expr
-    Ast.InEqual -> boolOp expr
     Ast.Greater -> boolOp expr
     Ast.GreaterEqual -> boolOp expr
     Ast.Less -> boolOp expr
     Ast.LessEqual -> boolOp expr
+    Ast.Equal -> eqOp expr
+    Ast.InEqual -> eqOp expr
     _ -> error ("Operator " ++ show operator ++ " is not a binary operator")
   where
     numberOp Ast.Binary {lhs, operator, rhs} =
@@ -82,14 +82,30 @@ interpretExpression expr@Ast.Binary {operator} =
     numberOp _ = error "Unexpected expression"
 
     boolOp Ast.Binary {lhs, operator, rhs} =
-      Ast.Boolean <$> (op <$> iBool lhs <*> iBool rhs)
+      Ast.Boolean <$> (op <$> iNumber lhs <*> iNumber rhs)
       where
         op = case operator of
-          Ast.Equal -> (==)
-          Ast.InEqual -> (/=)
           Ast.Greater -> (>)
           Ast.GreaterEqual -> (>=)
           Ast.Less -> (<)
           Ast.LessEqual -> (<=)
           _ -> error "Unexpected operator"
     boolOp _ = error "Unexpected expression"
+
+    eqOp Ast.Binary {lhs, operator, rhs} = do
+      l <- iExpr lhs
+      r <- iExpr rhs
+      eq <- areEqual l r
+      return
+        ( Ast.Boolean
+            ( case operator of
+                Ast.Equal -> eq
+                Ast.InEqual -> not eq
+                _ -> error "Unexpected operator"
+            )
+        )
+    eqOp _ = error "Unexpected expression"
+
+areEqual :: Ast.Value -> Ast.Value -> Interpreter Bool
+areEqual (Ast.Number lhs) (Ast.Number rhs) = return (lhs == rhs)
+areEqual lhs rhs = (==) <$> getTruthy lhs <*> getTruthy rhs

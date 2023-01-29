@@ -345,7 +345,7 @@ spec = describe "Lox.Parser" $ do
           <|> string "aab"
       )
       "aaaa"
-      `shouldFailWithError` "got eof but expected \"b\""
+      `shouldFailWithError` "got \"\" but expected \"b\""
 
     parse
       ( string "aa"
