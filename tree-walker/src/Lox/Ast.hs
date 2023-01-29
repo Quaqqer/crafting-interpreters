@@ -1,5 +1,9 @@
 module Lox.Ast where
 
+data Statement
+  = ExpressionStatement {expr :: Expression}
+  | PrintStatement {expr :: Expression}
+
 data Value
   = Number Double
   | String String

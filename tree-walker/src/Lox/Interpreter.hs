@@ -1,14 +1,19 @@
+{-# LANGUAGE PartialTypeSignatures #-}
+
 module Lox.Interpreter
   ( Interpreter (..),
     InterpreterError (..),
     Value (..),
+    iStmts,
+    iStmt,
     iExpr,
     emptyState,
     State (..),
   )
 where
 
-import Control.Monad (ap, (>=>))
+import Control.Monad (ap)
+import Control.Monad.IO.Class
 import Lox.Ast qualified as Ast
 
 data State = State {}
@@ -42,22 +47,39 @@ data InterpreterError
   deriving (Show)
 
 newtype Interpreter a = Interpreter
-  { run :: State -> Either (InterpreterError, State) (a, State)
+  { run :: State -> IO (Either (InterpreterError, State) (a, State))
   }
 
 deriving instance Functor Interpreter
 
 instance Applicative Interpreter where
-  pure a = Interpreter (\state -> Right (a, state))
+  pure a = Interpreter (\state -> return (Right (a, state)))
   (<*>) = ap
 
 instance Monad Interpreter where
   return = pure
 
-  x >>= f = Interpreter (x.run >=> (\(a, state) -> (f a).run state))
+  x >>= f =
+    Interpreter
+      ( \state ->
+          ( do
+              res <- x.run state
+              case res of
+                Left err -> return (Left err)
+                Right (a, state) -> (f a).run state
+          )
+      )
+
+instance MonadIO Interpreter where
+  liftIO io =
+    Interpreter
+      ( \state -> do
+          res <- io
+          return (Right (res, state))
+      )
 
 err :: InterpreterError -> Interpreter a
-err e = Interpreter (\state -> Left (e, state))
+err e = Interpreter (\state -> return (Left (e, state)))
 
 getNumber :: Value -> Interpreter Double
 getNumber (Number d) = return d
@@ -73,6 +95,21 @@ iNumber expr = iExpr expr >>= getNumber
 
 iBool :: Ast.Expression -> Interpreter Bool
 iBool expr = iExpr expr >>= getTruthy
+
+iStmts :: [Ast.Statement] -> Interpreter (Maybe Value)
+iStmts [s] = iStmt s
+iStmts (s : ss) = do
+  _ <- iStmt s
+  iStmts ss
+iStmts [] = return Nothing
+
+iStmt :: Ast.Statement -> Interpreter (Maybe Value)
+iStmt Ast.PrintStatement {expr} = do
+  res <- iExpr expr
+  liftIO $ print res
+  return Nothing
+iStmt Ast.ExpressionStatement {expr} = do
+  Just <$> iExpr expr
 
 iExpr :: Ast.Expression -> Interpreter Value
 iExpr Ast.Literal {value = astValue} = return (astValueToValue astValue)

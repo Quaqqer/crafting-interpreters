@@ -1,4 +1,10 @@
-module Lox.Parse (expression, spec) where
+module Lox.Parse
+  ( program,
+    statement,
+    expression,
+    spec,
+  )
+where
 
 import Control.Applicative ((<|>))
 import Data.Functor (($>))
@@ -9,6 +15,18 @@ import Lox.Token qualified as T
 import Test.Hspec
 
 type Parser = Parser' T.Token
+
+program :: Parser [Ast.Statement]
+program = many statement <* eof
+
+statement :: Parser Ast.Statement
+statement = exprStatement <|> printStatement
+
+exprStatement :: Parser Ast.Statement
+exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
+
+printStatement :: Parser Ast.Statement
+printStatement = Ast.PrintStatement <$> (char T.Print *> expression <* char T.Semicolon)
 
 expression :: Parser Ast.Expression
 expression = equality <?> "expression"
@@ -86,9 +104,10 @@ eString =
 
 bool :: Parser Ast.Expression
 bool =
-  ((char T.TTrue $> Ast.Literal (Ast.Boolean True))
-    <|> (char T.FFalse $> Ast.Literal (Ast.Boolean False)))
-      <?> "boolean"
+  ( (char T.TTrue $> Ast.Literal (Ast.Boolean True))
+      <|> (char T.FFalse $> Ast.Literal (Ast.Boolean False))
+  )
+    <?> "boolean"
 
 nil :: Parser Ast.Expression
 nil = char T.Nil $> Ast.Literal Ast.Nil <?> "nil"

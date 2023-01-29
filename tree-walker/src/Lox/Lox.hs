@@ -2,6 +2,7 @@
 
 module Lox.Lox (runFile, runPrompt) where
 
+import Data.Maybe (fromMaybe)
 import GHC.IO.Exception (ExitCode (ExitFailure))
 import Lox.Ast qualified as Ast
 import Lox.Interpreter qualified as Interpreter
@@ -50,23 +51,27 @@ runPrompt state = do
           putStrLn (showRunError err)
           runPrompt state
         Right (val, newState) -> do
-          print val
+          maybe (return ()) print val
           runPrompt newState
 
-run :: Interpreter.State -> String -> IO (Either RunError (Interpreter.Value, Interpreter.State))
+run ::
+  Interpreter.State ->
+  String ->
+  IO (Either RunError (Maybe Interpreter.Value, Interpreter.State))
 run state source = do
   case parse source of
     Left err -> return (Left err)
     Right ast -> do
-      case (Interpreter.iExpr ast).run state of
+      res <- (Interpreter.iStmts ast).run state
+      case res of
         Left (err, _) -> return (Left (RuntimeError (show err)))
         Right res -> return (Right res)
 
-parse :: String -> Either RunError Ast.Expression
+parse :: String -> Either RunError [Ast.Statement]
 parse s = case Parser.parse (scanTokens <* Parser.eof) s of
   Left err -> Left (TokenizationError (Parser.showParseError err))
   Right withPosTokens ->
     let tokens = map (.inner) withPosTokens
-     in case Parser.parse (Parse.expression <* Parser.eof) tokens of
+     in case Parser.parse Parse.program tokens of
           Left err -> Left (ParseError (Parser.showParseError err))
           Right ast -> Right ast
