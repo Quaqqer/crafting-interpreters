@@ -29,7 +29,8 @@ runFile f = do
   newState <- run Interpreter.emptyState source
 
   case newState of
-    Left _ -> exitWith (ExitFailure 65)
+    Left err -> do
+      putStrLn (showRunError err)
     Right _ -> return ()
 
 runPrompt :: Interpreter.State -> IO ()
