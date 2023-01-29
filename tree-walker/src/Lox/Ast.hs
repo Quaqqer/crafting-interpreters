@@ -4,7 +4,6 @@ data Statement
   = ExpressionStatement {expr :: Expression}
   | PrintStatement {expr :: Expression}
   | DeclareStatement {ident :: String, maybeExpr :: Maybe Expression}
-  | AssignStatement {ident :: String, expr :: Expression}
 
 data Value
   = Number Double
@@ -19,6 +18,7 @@ data Expression
   | Grouping {expr :: Expression}
   | Literal {value :: Value}
   | Unary {operator :: Operator, rhs :: Expression}
+  | Assign {ident :: String, expr :: Expression}
   deriving (Show, Eq)
 
 data Operator

@@ -171,10 +171,6 @@ iStmt Ast.DeclareStatement {ident, maybeExpr} = do
     Nothing -> return Nil
   envDeclare ident value
   return Nothing
-iStmt Ast.AssignStatement {ident, expr} = do
-  value <- iExpr expr
-  envAssign ident value
-  return Nothing
 
 iExpr :: Ast.Expression -> Interpreter Value
 iExpr Ast.Literal {value = astValue} = astValueToValue astValue
@@ -183,6 +179,10 @@ iExpr Ast.Unary {operator, rhs} = case operator of
   Ast.Minus -> Number . negate <$> (iExpr rhs >>= getNumber)
   Ast.Not -> Boolean . not <$> (iExpr rhs >>= getTruthy)
   _ -> error "Not a unary operator"
+iExpr Ast.Assign {ident, expr} = do
+  value <- iExpr expr
+  envAssign ident value
+  return value
 iExpr expr@Ast.Binary {operator} =
   case operator of
     Ast.Plus -> addOp expr

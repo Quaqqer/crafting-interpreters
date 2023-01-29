@@ -27,7 +27,6 @@ statement :: Parser Ast.Statement
 statement =
   exprStatement
     <|> printStatement
-    <|> assignStatement
 
 exprStatement :: Parser Ast.Statement
 exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
@@ -44,28 +43,29 @@ declareStatement = do
   _ <- char T.Semicolon
   return Ast.DeclareStatement {ident, maybeExpr}
 
-assignStatement :: Parser Ast.Statement
-assignStatement = do
-  ident <- identifier
-  _ <- char T.Equal
-  expr <- expression
-  _ <- char T.Semicolon
-  return Ast.AssignStatement {ident, expr}
+assignExpression :: Parser Ast.Expression
+assignExpression =
+  do
+    ident <- identifier
+    _ <- char T.Equal
+    expr <- expression
+    _ <- char T.Semicolon
+    return Ast.Assign {ident, expr}
+    <?> "assignment expression"
 
 expression :: Parser Ast.Expression
-expression = equality <?> "expression"
+expression = assignExpression <|> equality <?> "expression"
 
 binaryExpr :: [T.Token] -> Parser Ast.Expression -> Parser Ast.Expression
-binaryExpr ops next =
-  let self =
+binaryExpr ops next = do
+  let self lhs =
         ( do
-            lhs <- next
             operator <- operators ops
-            rhs <- self
-            return Ast.Binary {lhs, operator, rhs}
+            rhs <- next
+            self (Ast.Binary {lhs, operator, rhs})
         )
-          <|> next
-   in self
+          <|> return lhs
+   in next >>= self
 
 equality :: Parser Ast.Expression
 equality =
