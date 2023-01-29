@@ -1,14 +1,19 @@
-module Lox.Interpreter (Interpreter (..), iExpr, emptyState, State (..)) where
+module Lox.Interpreter
+  ( Interpreter (..),
+    InterpreterError (..),
+    iExpr,
+    emptyState,
+    State (..),
+  )
+where
 
 import Control.Monad (ap, (>=>))
 import Lox.Ast qualified as Ast
 
-data State = State
-  { hadError :: Bool
-  }
+data State = State {}
 
 emptyState :: State
-emptyState = State {hadError = False}
+emptyState = State
 
 data InterpreterError
   = DivisionByZero

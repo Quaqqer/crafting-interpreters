@@ -2,25 +2,36 @@
 
 module Lox.Lox (runFile, runPrompt) where
 
-import GHC.Base (when)
 import GHC.IO.Exception (ExitCode (ExitFailure))
-import Lox.Interpreter (Interpreter (..), emptyState, iExpr, State(..))
-import Lox.Parse (expression)
-import Lox.Parser (eof, parse, showParseError)
+import Lox.Ast qualified as Ast
+import Lox.Interpreter qualified as Interpreter
+import Lox.Parse qualified as Parse
+import Lox.Parser qualified as Parser
 import Lox.Scanner (scanTokens)
 import Lox.Token (WithPos (inner))
 import System.Exit (exitWith)
 import System.IO (hFlush, isEOF, stdout)
 
+data RunError
+  = TokenizationError String
+  | ParseError String
+  | RuntimeError String
+
+showRunError :: RunError -> String
+showRunError (TokenizationError s) = "failed tokenization with the following error:\n" ++ s
+showRunError (ParseError s) = "failed parsing with the following error:\n" ++ s
+showRunError (RuntimeError s) = "runtime error: " ++ s
+
 runFile :: String -> IO ()
 runFile f = do
   source <- readFile f
-  newState <- run emptyState source
+  newState <- run Interpreter.emptyState source
 
-  when (newState.hadError) $ do
-    exitWith (ExitFailure 65)
+  case newState of
+    Left _ -> exitWith (ExitFailure 65)
+    Right _ -> return ()
 
-runPrompt :: State -> IO ()
+runPrompt :: Interpreter.State -> IO ()
 runPrompt state = do
   putStr "> "
   hFlush stdout
@@ -32,47 +43,30 @@ runPrompt state = do
       return ()
     else do
       line <- getLine
-      newState <- run state line
+      result <- run state line
 
-      -- Loop
-      runPrompt emptyState
-
-run :: State -> String -> IO State
-run state source = do
-  let tokens = parse (scanTokens <* eof) source
-  case tokens of
-    Left err -> do
-      putStrLn "Could not parse tokens:"
-      putStrLn (showParseError err)
-      return state
-    Right withPosTokens -> do
-      let tokens = map (.inner) withPosTokens
-      let ast = parse (expression <* eof) tokens
-      case ast of
+      case result of
         Left err -> do
-          putStrLn "Could not parse tokens:"
-          putStrLn (showParseError err)
-          return state
-        Right ast -> do
-          let res = (iExpr ast).run state
-          case res of
-            Right (val, state) -> do
-              print val
-              return state
-            Left (err, _) -> do
-              print err
-              return state
+          putStrLn (showRunError err)
+          runPrompt state
+        Right (val, newState) -> do
+          print val
+          runPrompt newState
 
-printErr :: Int -> String -> IO ()
-printErr line message = report line "" message
+run :: Interpreter.State -> String -> IO (Either RunError (Ast.Value, Interpreter.State))
+run state source = do
+  case parse source of
+    Left err -> return (Left err)
+    Right ast -> do
+      case (Interpreter.iExpr ast).run state of
+        Left (err, _) -> return (Left (RuntimeError (show err)))
+        Right res -> return (Right res)
 
-report :: Int -> String -> String -> IO ()
-report line where_ message =
-  putStrLn
-    ( "[line "
-        ++ show line
-        ++ "] Error"
-        ++ where_
-        ++ ": "
-        ++ message
-    )
+parse :: String -> Either RunError Ast.Expression
+parse s = case Parser.parse (scanTokens <* Parser.eof) s of
+  Left err -> Left (TokenizationError (Parser.showParseError err))
+  Right withPosTokens ->
+    let tokens = map (.inner) withPosTokens
+     in case Parser.parse (Parse.expression <* Parser.eof) tokens of
+          Left err -> Left (ParseError (Parser.showParseError err))
+          Right ast -> Right ast
