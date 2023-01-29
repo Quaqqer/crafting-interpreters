@@ -53,7 +53,7 @@ runPrompt state = do
           print val
           runPrompt newState
 
-run :: Interpreter.State -> String -> IO (Either RunError (Ast.Value, Interpreter.State))
+run :: Interpreter.State -> String -> IO (Either RunError (Interpreter.Value, Interpreter.State))
 run state source = do
   case parse source of
     Left err -> return (Left err)

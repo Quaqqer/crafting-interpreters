@@ -1,6 +1,7 @@
 module Lox.Interpreter
   ( Interpreter (..),
     InterpreterError (..),
+    Value (..),
     iExpr,
     emptyState,
     State (..),
@@ -11,6 +12,25 @@ import Control.Monad (ap, (>=>))
 import Lox.Ast qualified as Ast
 
 data State = State {}
+
+data Value
+  = Number Double
+  | Boolean Bool
+  | String String
+  | Nil
+
+instance Show Value where
+  show (Number n) = show n
+  show (Boolean True) = "true"
+  show (Boolean False) = "false"
+  show (String s) = show s
+  show Nil = "nil"
+
+astValueToValue :: Ast.Value -> Value
+astValueToValue (Ast.Number d) = Number d
+astValueToValue (Ast.Boolean b) = Boolean b
+astValueToValue (Ast.String s) = String s
+astValueToValue Ast.Nil = Nil
 
 emptyState :: State
 emptyState = State
@@ -39,13 +59,13 @@ instance Monad Interpreter where
 err :: InterpreterError -> Interpreter a
 err e = Interpreter (\state -> Left (e, state))
 
-getNumber :: Ast.Value -> Interpreter Double
-getNumber (Ast.Number d) = return d
+getNumber :: Value -> Interpreter Double
+getNumber (Number d) = return d
 getNumber _ = err IncorrectType
 
-getTruthy :: Ast.Value -> Interpreter Bool
-getTruthy Ast.Nil = return False
-getTruthy (Ast.Boolean b) = return b
+getTruthy :: Value -> Interpreter Bool
+getTruthy Nil = return False
+getTruthy (Boolean b) = return b
 getTruthy _ = return True
 
 iNumber :: Ast.Expression -> Interpreter Double
@@ -54,12 +74,12 @@ iNumber expr = iExpr expr >>= getNumber
 iBool :: Ast.Expression -> Interpreter Bool
 iBool expr = iExpr expr >>= getTruthy
 
-iExpr :: Ast.Expression -> Interpreter Ast.Value
-iExpr Ast.Literal {value} = return value
+iExpr :: Ast.Expression -> Interpreter Value
+iExpr Ast.Literal {value = astValue} = return (astValueToValue astValue)
 iExpr Ast.Grouping {expr} = iExpr expr
 iExpr Ast.Unary {operator, rhs} = case operator of
-  Ast.Minus -> Ast.Number . negate <$> (iExpr rhs >>= getNumber)
-  Ast.Not -> Ast.Boolean . not <$> (iExpr rhs >>= getTruthy)
+  Ast.Minus -> Number . negate <$> (iExpr rhs >>= getNumber)
+  Ast.Not -> Boolean . not <$> (iExpr rhs >>= getTruthy)
   _ -> error "Not a unary operator"
 iExpr expr@Ast.Binary {operator} =
   case operator of
@@ -79,14 +99,14 @@ iExpr expr@Ast.Binary {operator} =
       l <- iExpr lhs
       r <- iExpr rhs
       ( case (l, r) of
-          (Ast.String l, Ast.String r) -> return (Ast.String (l ++ r))
-          (Ast.Number l, Ast.Number r) -> return (Ast.Number (l + r))
+          (String l, String r) -> return (String (l ++ r))
+          (Number l, Number r) -> return (Number (l + r))
           (_, _) -> err IncorrectType
         )
     addOp _ = error "Unexpected expression"
 
     numberOp Ast.Binary {lhs, operator, rhs} =
-      Ast.Number <$> (op <$> iNumber lhs <*> iNumber rhs)
+      Number <$> (op <$> iNumber lhs <*> iNumber rhs)
       where
         op = case operator of
           Ast.Minus -> (-)
@@ -96,7 +116,7 @@ iExpr expr@Ast.Binary {operator} =
     numberOp _ = error "Unexpected expression"
 
     boolOp Ast.Binary {lhs, operator, rhs} =
-      Ast.Boolean <$> (op <$> iNumber lhs <*> iNumber rhs)
+      Boolean <$> (op <$> iNumber lhs <*> iNumber rhs)
       where
         op = case operator of
           Ast.Greater -> (>)
@@ -111,7 +131,7 @@ iExpr expr@Ast.Binary {operator} =
       r <- iExpr rhs
       eq <- areEqual l r
       return
-        ( Ast.Boolean
+        ( Boolean
             ( case operator of
                 Ast.Equal -> eq
                 Ast.InEqual -> not eq
@@ -120,7 +140,7 @@ iExpr expr@Ast.Binary {operator} =
         )
     eqOp _ = error "Unexpected expression"
 
-areEqual :: Ast.Value -> Ast.Value -> Interpreter Bool
-areEqual (Ast.Number lhs) (Ast.Number rhs) = return (lhs == rhs)
-areEqual (Ast.String lhs) (Ast.String rhs) = return (lhs == rhs)
+areEqual :: Value -> Value -> Interpreter Bool
+areEqual (Number lhs) (Number rhs) = return (lhs == rhs)
+areEqual (String lhs) (String rhs) = return (lhs == rhs)
 areEqual lhs rhs = (==) <$> getTruthy lhs <*> getTruthy rhs
