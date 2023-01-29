@@ -1,6 +1,5 @@
 module Lox.Parse
   ( program,
-    statement,
     expression,
     spec,
   )
@@ -17,13 +16,17 @@ import Test.Hspec
 type Parser = Parser' T.Token
 
 program :: Parser [Ast.Statement]
-program = many statement <* eof
+program = many declaration <* eof
+
+declaration :: Parser Ast.Statement
+declaration =
+  declareStatement
+    <|> statement
 
 statement :: Parser Ast.Statement
 statement =
   exprStatement
     <|> printStatement
-    <|> declareStatement
     <|> assignStatement
 
 exprStatement :: Parser Ast.Statement
