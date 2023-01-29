@@ -20,13 +20,34 @@ program :: Parser [Ast.Statement]
 program = many statement <* eof
 
 statement :: Parser Ast.Statement
-statement = exprStatement <|> printStatement
+statement =
+  exprStatement
+    <|> printStatement
+    <|> declareStatement
+    <|> assignStatement
 
 exprStatement :: Parser Ast.Statement
 exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
 
 printStatement :: Parser Ast.Statement
 printStatement = Ast.PrintStatement <$> (char T.Print *> expression <* char T.Semicolon)
+
+declareStatement :: Parser Ast.Statement
+declareStatement = do
+  _ <- char T.Var
+  ident <- identifier
+  _ <- char T.Equal
+  maybeExpr <- optional expression
+  _ <- char T.Semicolon
+  return Ast.DeclareStatement {ident, maybeExpr}
+
+assignStatement :: Parser Ast.Statement
+assignStatement = do
+  ident <- identifier
+  _ <- char T.Equal
+  expr <- expression
+  _ <- char T.Semicolon
+  return Ast.AssignStatement {ident, expr}
 
 expression :: Parser Ast.Expression
 expression = equality <?> "expression"
@@ -82,6 +103,7 @@ literal =
     <|> eString
     <|> bool
     <|> nil
+    <|> (Ast.Literal . Ast.Identifier <$> identifier)
     <?> "literal"
 
 number :: Parser Ast.Expression
@@ -101,6 +123,15 @@ eString =
         _ -> Nothing
     )
     (Set.singleton (Label "string"))
+
+identifier :: Parser String
+identifier =
+  token
+    ( \case
+        T.Identifier ident -> Just ident
+        _ -> Nothing
+    )
+    (Set.singleton (Label "identifier"))
 
 bool :: Parser Ast.Expression
 bool =

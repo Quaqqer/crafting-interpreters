@@ -66,6 +66,8 @@ data ParseError t = BasicError
     expected :: Set (ErrorItem t)
   }
 
+deriving instance Show t => Show (ParseError t)
+
 data ErrorItem t
   = Tokens [t]
   | Label String
@@ -176,9 +178,10 @@ instance (Ord t, Show t) => Alternative (Parser' t) where
       )
     where
       mergeErr l r =
-        if l.offset == r.offset && l.got == r.got
-          then l {expected = l.expected `Set.union` r.expected}
-          else error (show l.expected ++ "<" ++ show l.got ++ ">, " ++ show r.expected ++ "<" ++ show r.got ++ "> " ++ "Assertion of same lengths failed")
+        if l.offset == r.offset
+          then -- FIXME: Got are not necessarily equal, that might be a problem
+            l {expected = l.expected `Set.union` r.expected}
+          else error ("Assertion of same lengths failed: " ++ show l ++ show r)
 
 infix 0 <?>
 

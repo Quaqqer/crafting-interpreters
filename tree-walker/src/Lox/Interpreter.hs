@@ -14,9 +14,37 @@ where
 
 import Control.Monad (ap)
 import Control.Monad.IO.Class
+import Data.Map (Map)
+import Data.Map qualified as Map
 import Lox.Ast qualified as Ast
 
-data State = State {}
+data Environment = Environment
+  { vars :: Map String Value,
+    parent :: Maybe Environment
+  }
+
+environmentGet :: String -> Environment -> Maybe Value
+environmentGet ident env = case Map.lookup ident env.vars of
+  Nothing -> case env.parent of
+    Nothing -> Nothing
+    Just parent -> environmentGet ident parent
+  Just v -> Just v
+
+environmentDeclare :: String -> Value -> Environment -> Environment
+environmentDeclare ident value env = env {vars = Map.insert ident value env.vars}
+
+environmentAssign :: String -> Value -> Environment -> Maybe Environment
+environmentAssign ident value env =
+  if Map.member ident env.vars
+    then Just (env {vars = Map.insert ident value env.vars})
+    else case env.parent of
+      Just parent ->
+        environmentAssign ident value parent >>= (\p -> Just env {parent = Just p})
+      Nothing -> Nothing
+
+data State = State
+  { env :: Environment
+  }
 
 data Value
   = Number Double
@@ -31,19 +59,21 @@ instance Show Value where
   show (String s) = show s
   show Nil = "nil"
 
-astValueToValue :: Ast.Value -> Value
-astValueToValue (Ast.Number d) = Number d
-astValueToValue (Ast.Boolean b) = Boolean b
-astValueToValue (Ast.String s) = String s
-astValueToValue Ast.Nil = Nil
+astValueToValue :: Ast.Value -> Interpreter Value
+astValueToValue (Ast.Number d) = return (Number d)
+astValueToValue (Ast.Boolean b) = return (Boolean b)
+astValueToValue (Ast.String s) = return (String s)
+astValueToValue Ast.Nil = return Nil
+astValueToValue (Ast.Identifier ident) = envLookup ident
 
 emptyState :: State
-emptyState = State
+emptyState = State {env = Environment {vars = Map.empty, parent = Nothing}}
 
 data InterpreterError
   = DivisionByZero
   | IncorrectType
   | ErrorMessage String
+  | UndefinedVariable String
   deriving (Show)
 
 newtype Interpreter a = Interpreter
@@ -81,6 +111,31 @@ instance MonadIO Interpreter where
 err :: InterpreterError -> Interpreter a
 err e = Interpreter (\state -> return (Left (e, state)))
 
+getState :: Interpreter State
+getState = Interpreter (\state -> return (Right (state, state)))
+
+setState :: State -> Interpreter ()
+setState newState = Interpreter (\_ -> return (Right ((), newState)))
+
+envLookup :: String -> Interpreter Value
+envLookup ident = do
+  state <- getState
+  case environmentGet ident state.env of
+    Just v -> return v
+    Nothing -> err (UndefinedVariable ident)
+
+envAssign :: String -> Value -> Interpreter ()
+envAssign ident value = do
+  state <- getState
+  case environmentAssign ident value state.env of
+    Nothing -> err (UndefinedVariable ident)
+    Just env -> setState state {env}
+
+envDeclare :: String -> Value -> Interpreter ()
+envDeclare ident value = do
+  state <- getState
+  setState state {env = environmentDeclare ident value state.env}
+
 getNumber :: Value -> Interpreter Double
 getNumber (Number d) = return d
 getNumber _ = err IncorrectType
@@ -110,9 +165,19 @@ iStmt Ast.PrintStatement {expr} = do
   return Nothing
 iStmt Ast.ExpressionStatement {expr} = do
   Just <$> iExpr expr
+iStmt Ast.DeclareStatement {ident, maybeExpr} = do
+  value <- case maybeExpr of
+    Just expr -> iExpr expr
+    Nothing -> return Nil
+  envDeclare ident value
+  return Nothing
+iStmt Ast.AssignStatement {ident, expr} = do
+  value <- iExpr expr
+  envAssign ident value
+  return Nothing
 
 iExpr :: Ast.Expression -> Interpreter Value
-iExpr Ast.Literal {value = astValue} = return (astValueToValue astValue)
+iExpr Ast.Literal {value = astValue} = astValueToValue astValue
 iExpr Ast.Grouping {expr} = iExpr expr
 iExpr Ast.Unary {operator, rhs} = case operator of
   Ast.Minus -> Number . negate <$> (iExpr rhs >>= getNumber)

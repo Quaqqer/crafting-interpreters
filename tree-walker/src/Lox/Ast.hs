@@ -3,12 +3,15 @@ module Lox.Ast where
 data Statement
   = ExpressionStatement {expr :: Expression}
   | PrintStatement {expr :: Expression}
+  | DeclareStatement {ident :: String, maybeExpr :: Maybe Expression}
+  | AssignStatement {ident :: String, expr :: Expression}
 
 data Value
   = Number Double
   | String String
   | Boolean Bool
   | Nil
+  | Identifier String
   deriving (Show, Eq)
 
 data Expression
