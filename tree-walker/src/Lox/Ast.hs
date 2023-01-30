@@ -5,6 +5,11 @@ data Statement
   | PrintStatement {expr :: Expression}
   | DeclareStatement {ident :: String, maybeExpr :: Maybe Expression}
   | BlockStatement {stmts :: [Statement]}
+  | IfStatement
+      { condition :: Expression,
+        then_ :: Statement,
+        else_ :: Maybe Statement
+      }
 
 data Value
   = Number Double

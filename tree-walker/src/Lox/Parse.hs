@@ -26,11 +26,22 @@ declaration =
 statement :: Parser Ast.Statement
 statement =
   exprStatement
+    <|> ifStatement
     <|> printStatement
     <|> block
 
 exprStatement :: Parser Ast.Statement
 exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
+
+ifStatement :: Parser Ast.Statement
+ifStatement = do
+  _ <- char T.If
+  _ <- char T.LeftParen
+  condition <- expression
+  _ <- char T.RightParen
+  then_ <- statement
+  else_ <- optional (char T.Else *> statement)
+  return Ast.IfStatement {condition, then_, else_}
 
 printStatement :: Parser Ast.Statement
 printStatement = Ast.PrintStatement <$> (char T.Print *> expression <* char T.Semicolon)

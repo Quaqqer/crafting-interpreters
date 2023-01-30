@@ -14,10 +14,12 @@ where
 
 import Control.Monad (ap)
 import Control.Monad.IO.Class
+import Data.Foldable (forM_)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Lox.Ast qualified as Ast
+import Data.Functor (void)
 
 data Environment = Environment
   { vars :: Map String Value,
@@ -181,6 +183,12 @@ iStmt Ast.BlockStatement {stmts} = do
   mapM_ iStmt stmts
   eState <- getState
   setState (eState {env = fromJust eState.env.parent})
+  return Nothing
+iStmt Ast.IfStatement {condition, then_, else_} = do
+  c <- iExpr condition >>= getTruthy
+  _ <- if c
+    then void (iStmt then_)
+    else forM_ else_ iStmt
   return Nothing
 
 iExpr :: Ast.Expression -> Interpreter Value
