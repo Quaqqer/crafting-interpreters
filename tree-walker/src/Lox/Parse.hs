@@ -27,12 +27,20 @@ statement :: Parser Ast.Statement
 statement =
   exprStatement
     <|> printStatement
+    <|> block
 
 exprStatement :: Parser Ast.Statement
 exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
 
 printStatement :: Parser Ast.Statement
 printStatement = Ast.PrintStatement <$> (char T.Print *> expression <* char T.Semicolon)
+
+block :: Parser Ast.Statement
+block = do
+  _ <- char T.LeftBrace
+  stmts <- many declaration
+  _ <- char T.RightBrace
+  return Ast.BlockStatement {stmts}
 
 declareStatement :: Parser Ast.Statement
 declareStatement = do

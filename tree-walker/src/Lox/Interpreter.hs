@@ -16,12 +16,16 @@ import Control.Monad (ap)
 import Control.Monad.IO.Class
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Maybe (fromJust)
 import Lox.Ast qualified as Ast
 
 data Environment = Environment
   { vars :: Map String Value,
     parent :: Maybe Environment
   }
+
+emptyEnvironment :: Environment
+emptyEnvironment = Environment {vars = Map.empty, parent = Nothing}
 
 environmentGet :: String -> Environment -> Maybe Value
 environmentGet ident env = case Map.lookup ident env.vars of
@@ -170,6 +174,13 @@ iStmt Ast.DeclareStatement {ident, maybeExpr} = do
     Just expr -> iExpr expr
     Nothing -> return Nil
   envDeclare ident value
+  return Nothing
+iStmt Ast.BlockStatement {stmts} = do
+  iState <- getState
+  setState (iState {env = emptyEnvironment {parent = Just iState.env}})
+  mapM_ iStmt stmts
+  eState <- getState
+  setState (eState {env = fromJust eState.env.parent})
   return Nothing
 
 iExpr :: Ast.Expression -> Interpreter Value

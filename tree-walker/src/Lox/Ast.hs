@@ -4,6 +4,7 @@ data Statement
   = ExpressionStatement {expr :: Expression}
   | PrintStatement {expr :: Expression}
   | DeclareStatement {ident :: String, maybeExpr :: Maybe Expression}
+  | BlockStatement {stmts :: [Statement]}
 
 data Value
   = Number Double
