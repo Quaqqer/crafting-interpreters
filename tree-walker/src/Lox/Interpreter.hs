@@ -191,6 +191,13 @@ iStmt Ast.IfStatement {condition, then_, else_} = do
       then void (iStmt then_)
       else forM_ else_ iStmt
   return Nothing
+iStmt whileStmt@Ast.WhileStatement {condition, do_} = do
+  c <- iExpr condition >>= getTruthy
+  if c
+    then do
+      _ <- iStmt do_
+      iStmt whileStmt
+    else return Nothing
 
 iExpr :: Ast.Expression -> Interpreter Value
 iExpr Ast.Literal {value = astValue} = astValueToValue astValue

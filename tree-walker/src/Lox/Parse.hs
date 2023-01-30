@@ -28,6 +28,7 @@ statement =
   exprStatement
     <|> ifStatement
     <|> printStatement
+    <|> whileStatement
     <|> block
 
 exprStatement :: Parser Ast.Statement
@@ -45,6 +46,13 @@ ifStatement = do
 
 printStatement :: Parser Ast.Statement
 printStatement = Ast.PrintStatement <$> (char T.Print *> expression <* char T.Semicolon)
+
+whileStatement :: Parser Ast.Statement
+whileStatement = do
+  _ <- char T.While
+  condition <- char T.LeftParen *> expression <* char T.RightParen
+  do_ <- statement
+  return Ast.WhileStatement {condition, do_}
 
 block :: Parser Ast.Statement
 block = do

@@ -10,6 +10,10 @@ data Statement
         then_ :: Statement,
         else_ :: Maybe Statement
       }
+  | WhileStatement
+      { condition :: Expression,
+        do_ :: Statement
+      }
 
 data Value
   = Number Double
