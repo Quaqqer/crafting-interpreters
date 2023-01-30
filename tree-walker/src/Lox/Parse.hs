@@ -73,7 +73,7 @@ assign = do
             expr <- self
             return Ast.Assign {ident, expr}
         )
-          <|> equality
+          <|> logicOr
    in self
 
 binaryExpr :: [T.Token] -> Parser Ast.Expression -> Parser Ast.Expression
@@ -86,6 +86,16 @@ binaryExpr ops next = do
         )
           <|> return lhs
    in next >>= self
+
+logicOr :: Parser Ast.Expression
+logicOr =
+  binaryExpr [T.Or] logicAnd
+    <?> "or"
+
+logicAnd :: Parser Ast.Expression
+logicAnd =
+  binaryExpr [T.And] equality
+    <?> "and"
 
 equality :: Parser Ast.Expression
 equality =
@@ -188,6 +198,8 @@ tokenToOperator T.Plus = Ast.Plus
 tokenToOperator T.Star = Ast.Multiplication
 tokenToOperator T.Slash = Ast.Division
 tokenToOperator T.Bang = Ast.Not
+tokenToOperator T.Or = Ast.Or
+tokenToOperator T.And = Ast.And
 tokenToOperator _ = error "Unexpected operator"
 
 spec :: Spec

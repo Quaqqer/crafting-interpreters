@@ -39,4 +39,6 @@ data Operator
   | Multiplication
   | Division
   | Not
+  | And
+  | Or
   deriving (Show, Eq)

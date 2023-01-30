@@ -15,11 +15,11 @@ where
 import Control.Monad (ap)
 import Control.Monad.IO.Class
 import Data.Foldable (forM_)
+import Data.Functor (void)
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Lox.Ast qualified as Ast
-import Data.Functor (void)
 
 data Environment = Environment
   { vars :: Map String Value,
@@ -186,9 +186,10 @@ iStmt Ast.BlockStatement {stmts} = do
   return Nothing
 iStmt Ast.IfStatement {condition, then_, else_} = do
   c <- iExpr condition >>= getTruthy
-  _ <- if c
-    then void (iStmt then_)
-    else forM_ else_ iStmt
+  _ <-
+    if c
+      then void (iStmt then_)
+      else forM_ else_ iStmt
   return Nothing
 
 iExpr :: Ast.Expression -> Interpreter Value
@@ -202,7 +203,7 @@ iExpr Ast.Assign {ident, expr} = do
   value <- iExpr expr
   envAssign ident value
   return value
-iExpr expr@Ast.Binary {operator} =
+iExpr expr@Ast.Binary {lhs, operator, rhs} =
   case operator of
     Ast.Plus -> addOp expr
     Ast.Minus -> numberOp expr
@@ -214,6 +215,18 @@ iExpr expr@Ast.Binary {operator} =
     Ast.LessEqual -> boolOp expr
     Ast.Equal -> eqOp expr
     Ast.InEqual -> eqOp expr
+    Ast.And -> do
+      l <- iExpr lhs
+      ltruthy <- getTruthy l
+      if ltruthy
+        then iExpr rhs
+        else return l
+    Ast.Or -> do
+      l <- iExpr lhs
+      ltruthy <- getTruthy l
+      if ltruthy
+        then return l
+        else iExpr rhs
     _ -> error ("Operator " ++ show operator ++ " is not a binary operator")
   where
     addOp Ast.Binary {lhs, operator = Ast.Plus, rhs} = do
