@@ -6,7 +6,8 @@ module Lox.Parse
 where
 
 import Control.Applicative ((<|>))
-import Data.Functor (($>))
+import Data.Functor (($>), (<&>))
+import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Lox.Ast qualified as Ast
 import Lox.Parser hiding (spec)
@@ -26,6 +27,7 @@ declaration =
 statement :: Parser Ast.Statement
 statement =
   exprStatement
+    <|> forStatement
     <|> ifStatement
     <|> printStatement
     <|> whileStatement
@@ -33,6 +35,32 @@ statement =
 
 exprStatement :: Parser Ast.Statement
 exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
+
+forStatement :: Parser Ast.Statement
+forStatement = do
+  _ <- char T.For
+  _ <- char T.LeftParen
+  decl <- declareStatement <|> exprStatement
+  condition <- optional expression
+  _ <- char T.Semicolon
+  rhs <- optional expression
+  _ <- char T.RightParen
+  do_ <- statement
+  -- This is so ugly, but whatever
+  return
+    Ast.BlockStatement
+      { stmts =
+          [ decl,
+            Ast.WhileStatement
+              { condition = fromMaybe (Ast.Literal (Ast.Boolean True)) condition,
+                do_ =
+                  Ast.BlockStatement
+                    [ do_,
+                      fromMaybe (Ast.BlockStatement []) (rhs <&> Ast.ExpressionStatement)
+                    ]
+              }
+          ]
+      }
 
 ifStatement :: Parser Ast.Statement
 ifStatement = do
