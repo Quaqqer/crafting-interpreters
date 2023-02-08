@@ -20,26 +20,27 @@ import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Lox.Ast qualified as Ast
+import Data.IORef
 
 data Environment = Environment
-  { vars :: Map String Value,
+  { vars :: Map String (IORef Value),
     parent :: Maybe Environment
   }
 
 emptyEnvironment :: Environment
 emptyEnvironment = Environment {vars = Map.empty, parent = Nothing}
 
-environmentGet :: String -> Environment -> Maybe Value
+environmentGet :: String -> Environment -> Maybe (IORef Value)
 environmentGet ident env = case Map.lookup ident env.vars of
   Nothing -> case env.parent of
     Nothing -> Nothing
     Just parent -> environmentGet ident parent
   Just v -> Just v
 
-environmentDeclare :: String -> Value -> Environment -> Environment
+environmentDeclare :: String -> IORef Value -> Environment -> Environment
 environmentDeclare ident value env = env {vars = Map.insert ident value env.vars}
 
-environmentAssign :: String -> Value -> Environment -> Maybe Environment
+environmentAssign :: String -> IORef Value -> Environment -> Maybe Environment
 environmentAssign ident value env =
   if Map.member ident env.vars
     then Just (env {vars = Map.insert ident value env.vars})
@@ -127,20 +128,21 @@ envLookup :: String -> Interpreter Value
 envLookup ident = do
   state <- getState
   case environmentGet ident state.env of
-    Just v -> return v
+    Just v -> liftIO $ readIORef v
     Nothing -> err (UndefinedVariable ident)
 
 envAssign :: String -> Value -> Interpreter ()
 envAssign ident value = do
   state <- getState
-  case environmentAssign ident value state.env of
+  case environmentGet ident state.env of
+    Just v -> liftIO $ writeIORef v value
     Nothing -> err (UndefinedVariable ident)
-    Just env -> setState state {env}
 
 envDeclare :: String -> Value -> Interpreter ()
 envDeclare ident value = do
   state <- getState
-  setState state {env = environmentDeclare ident value state.env}
+  ref <- liftIO $ newIORef value
+  setState state {env = environmentDeclare ident ref state.env}
 
 getNumber :: Value -> Interpreter Double
 getNumber (Number d) = return d

@@ -57,6 +57,7 @@ library
     , containers
     , hspec
     , optparse-applicative
+    , stm
   default-language: Haskell2010
 
 executable htreelox
@@ -91,6 +92,7 @@ executable htreelox
     , hspec
     , htreelox
     , optparse-applicative
+    , stm
   default-language: Haskell2010
 
 test-suite htreelox-test
@@ -126,4 +128,5 @@ test-suite htreelox-test
     , hspec
     , htreelox
     , optparse-applicative
+    , stm
   default-language: Haskell2010

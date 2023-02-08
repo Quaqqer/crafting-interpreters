@@ -39,6 +39,16 @@ One special behaviour in my implementation
 is that state will revert if a statement causes an error, so a statement that
 makes an assignment and crashes afterwards will be reverted.
 
+### Mutability
+
+Since functions in Lox capture their environment we need to have multiple
+references to variables and we need to be able to mutate them. We could simulate
+this with a data store and store variables as handles to the values in the data
+store. The problem with this is that we also need to count references to the
+handles so that we know when to remove the values from the store. This is a lot
+of work, so I opted to use [stm](https://hackage.haskell.org/package/stm), which
+allows for mutable memory in haskell.
+
 ## General remarks
 
 This has been a great exercise in both programming interpreters and programming
