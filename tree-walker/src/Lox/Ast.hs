@@ -14,6 +14,7 @@ data Statement
       { condition :: Expression,
         do_ :: Statement
       }
+  deriving (Show, Eq)
 
 data Value
   = Number Double
@@ -29,6 +30,7 @@ data Expression
   | Literal {value :: Value}
   | Unary {operator :: Operator, rhs :: Expression}
   | Assign {ident :: String, expr :: Expression}
+  | Call {f :: Expression, args :: [Expression]}
   deriving (Show, Eq)
 
 data Operator

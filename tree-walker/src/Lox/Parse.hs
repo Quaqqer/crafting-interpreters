@@ -6,11 +6,13 @@ module Lox.Parse
 where
 
 import Control.Applicative ((<|>))
+import Control.Monad (unless)
 import Data.Functor (($>), (<&>))
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Lox.Ast qualified as Ast
 import Lox.Parser hiding (spec)
+import Lox.Scanner qualified as S
 import Lox.Token qualified as T
 import Test.Hspec
 
@@ -160,8 +162,20 @@ unary =
       rhs <- expression
       return Ast.Unary {operator, rhs}
   )
-    <|> primary
+    <|> call
     <?> "unary"
+
+call :: Parser Ast.Expression
+call =
+  ( do
+      f <- primary
+      args <- parenthesized (sepBy expression (char T.Comma))
+      if length args > 255
+        then err "Too many args, a maximum of 255 is allowed"
+        else return Ast.Call {f, args}
+  )
+    <|> primary
+    <?> "call"
 
 primary :: Parser Ast.Expression
 primary = literal <|> grouping
@@ -238,6 +252,17 @@ tokenToOperator T.Or = Ast.Or
 tokenToOperator T.And = Ast.And
 tokenToOperator _ = error "Unexpected operator"
 
+parenthesized :: Parser' T.Token b -> Parser' T.Token b
+parenthesized p = surrounded (char T.LeftParen) p (char T.RightParen)
+
+shouldSucceedOn' :: Show a => Parser a -> String -> Expectation
+shouldSucceedOn' p s = case parse S.scanTokens s of
+  Left err -> expectationFailure ("scanning tokens failed with error:\n" ++ showParseError err)
+  Right tokens -> case parse' p (map (.inner) tokens) of
+    Left (err, _) -> expectationFailure ("parsing tokens failed with error:\n" ++ showParseError err)
+    Right (a, s) ->
+      unless (null s.rest) (expectationFailure ("expected to parse fully but rest is:\n" ++ show s.rest ++ "\nparsed:\n" ++ show a))
+
 spec :: Spec
 spec = do
   -- it "parses precedence correctly" $ do
@@ -255,3 +280,18 @@ spec = do
             rhs =
               Ast.Literal (Ast.Number 2)
           }
+
+    it "parses declarations" $ do
+      declareStatement `shouldSucceedOn'` "var a = 2;"
+      declareStatement `shouldSucceedOn'` "var b;"
+
+    it "parses if statements" $ do
+      ifStatement `shouldSucceedOn'` "if (true) print a;"
+
+    it "parses multiple statements" $ do
+      program `shouldSucceedOn'` "var a = 1; var b = 2; print b;"
+
+    it "parses a function call" $ do
+      call `shouldSucceedOn'` "f(1,2,3,4,5,6,7,8)"
+
+      call `shouldSucceedOn'` "f(1,2,3,4,5,6,7,8)"

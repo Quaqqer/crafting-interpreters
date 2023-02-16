@@ -1,33 +1,38 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 module Lox.Parser
-  ( Parser' (..),
-    ParserState (..),
-    ErrorBundle (..),
-    ParseError (..),
+  ( ErrorBundle (..),
     ErrorItem (..),
-    showParseError,
+    ParseError (..),
+    ParseResult,
+    ParserState (..),
+    Parser' (..),
+    (<?>),
+    char,
+    eof,
+    err,
+    getState,
+    label,
+    lookAhead,
+    many,
+    notFollowedBy,
+    optional,
+    parse',
     parse,
     parseFile,
-    (<?>),
-    label,
     satisfy,
-    token,
-    char,
-    optional,
-    many,
-    some,
-    takeWhile,
-    lookAhead,
-    notFollowedBy,
-    string,
-    eof,
-    getState,
-    shouldParse,
-    shouldSucceedOn,
+    sepBy,
     shouldFailOn,
     shouldFailWithError,
+    shouldParse,
+    shouldSucceedOn,
+    showParseError,
+    some,
     spec,
+    string,
+    surrounded,
+    takeWhile,
+    token,
   )
 where
 
@@ -60,11 +65,13 @@ data ErrorBundle t = ErrorBundle
     error :: ParseError t
   }
 
-data ParseError t = BasicError
-  { offset :: Int,
-    got :: Maybe (ErrorItem t),
-    expected :: Set (ErrorItem t)
-  }
+data ParseError t
+  = BasicError
+      { offset :: Int,
+        got :: Maybe (ErrorItem t),
+        expected :: Set (ErrorItem t)
+      }
+  | CustomError {offset :: Int, message :: String}
 
 deriving instance Show t => Show (ParseError t)
 
@@ -89,17 +96,16 @@ showParseError BasicError {got, expected} =
           [e] -> Just ("got " ++ show got ++ " but expected " ++ show e)
           es -> Just ("got " ++ show got ++ " but expected one of " ++ List.intercalate ", " (map show es))
    in Data.Maybe.fromMaybe "Unknown parse error" msg
+showParseError CustomError {message} = message
 
 type ParseResult t a = Either (ParseError t, ParserState t) (a, ParserState t)
 
+parse' :: Parser' t a -> [t] -> ParseResult t a
+parse' p ts = p.run (ParserState {rest = ts, offset = 0})
+
 parse :: Parser' t a -> [t] -> Either (ParseError t) a
 parse parser source =
-  case parser.run
-    ( ParserState
-        { rest = source,
-          offset = 0
-        }
-    ) of
+  case parse' parser source of
     Left (err, _state) -> Left err
     Right (a, _state) -> Right a
 
@@ -269,6 +275,15 @@ notFollowedBy parser =
         Right (_, state) -> Left (BasicError state.offset Nothing Set.empty, state)
     )
 
+surrounded :: Parser' t a -> Parser' t b -> Parser' t c -> Parser' t b
+surrounded l p r = l *> p <* r
+
+sepBy :: Parser' t a -> Parser' t b -> Parser' t [a]
+sepBy p s = do
+  first <- p
+  rest <- many (s *> p)
+  return (first : rest)
+
 string :: Eq t => [t] -> Parser' t [t]
 string = foldr (\c -> (<*>) ((:) <$> char c)) (pure [])
 
@@ -289,6 +304,9 @@ eof =
 
 getState :: Parser' t (ParserState t)
 getState = Parser (\state -> Right (state, state))
+
+err :: String -> Parser' t a
+err msg = Parser (\s -> Left (CustomError {offset = s.offset, message = msg}, s))
 
 shouldParse :: Show t => Show a => Eq a => Either (ParseError t) a -> a -> Expectation
 shouldParse (Right l) r = l `shouldBe` r
