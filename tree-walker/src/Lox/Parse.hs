@@ -8,6 +8,7 @@ where
 import Control.Applicative ((<|>))
 import Control.Monad (unless)
 import Data.Functor (($>), (<&>))
+import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Lox.Ast qualified as Ast
@@ -263,6 +264,14 @@ shouldSucceedOn' p s = case parse S.scanTokens s of
     Right (a, s) ->
       unless (null s.rest) (expectationFailure ("expected to parse fully but rest is:\n" ++ show s.rest ++ "\nparsed:\n" ++ show a))
 
+shouldFailOn' :: Show a => Parser a -> String -> Expectation
+shouldFailOn' p s = case parse S.scanTokens s of
+  Left err -> expectationFailure ("scanning tokens failed with error:\n" ++ showParseError err)
+  Right tokens -> case parse' p (map (.inner) tokens) of
+    Left _ -> return ()
+    Right (a, s) ->
+      expectationFailure ("expected to fail parsing but parsed:\n" ++ show a ++ (if null s.rest then "" else "with rest:\n" ++ show s.rest))
+
 spec :: Spec
 spec = do
   -- it "parses precedence correctly" $ do
@@ -294,4 +303,4 @@ spec = do
     it "parses a function call" $ do
       call `shouldSucceedOn'` "f(1,2,3,4,5,6,7,8)"
 
-      call `shouldSucceedOn'` "f(1,2,3,4,5,6,7,8)"
+-- call `shouldFailOn'` ("f(" ++ intercalate "," (map (const "x") [0 :: Integer .. 255]) ++ ")")
