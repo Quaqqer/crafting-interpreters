@@ -16,11 +16,11 @@ import Control.Monad (ap)
 import Control.Monad.IO.Class
 import Data.Foldable (forM_)
 import Data.Functor (void)
+import Data.IORef
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromJust)
 import Lox.Ast qualified as Ast
-import Data.IORef
 
 data Environment = Environment
   { vars :: Map String (IORef Value),
@@ -58,6 +58,11 @@ data Value
   | Boolean Bool
   | String String
   | Nil
+  | Function
+      { params :: [String],
+        -- | A block statement
+        body :: Ast.Statement
+      }
 
 instance Show Value where
   show (Number n) = show n
@@ -81,6 +86,8 @@ data InterpreterError
   | IncorrectType
   | ErrorMessage String
   | UndefinedVariable String
+  | InterruptReturn Value
+  | MismatchArguments
   deriving (Show)
 
 newtype Interpreter a = Interpreter
@@ -166,6 +173,25 @@ iStmts (s : ss) = do
   iStmts ss
 iStmts [] = return Nothing
 
+pushEnv :: Environment -> Interpreter ()
+pushEnv env = do
+  s <- getState
+  setState (s {env = env {parent = Just s.env}})
+
+popEnv :: Interpreter ()
+popEnv = do
+  s <- getState
+  case s.env.parent of
+    Just env -> setState s {env}
+    Nothing -> err (ErrorMessage "Popped root environment, something went wrong")
+
+withEnv :: Environment -> Interpreter a -> Interpreter a
+withEnv env i = do
+  pushEnv env
+  a <- i
+  popEnv
+  return a
+
 iStmt :: Ast.Statement -> Interpreter (Maybe Value)
 iStmt Ast.PrintStatement {expr} = do
   res <- iExpr expr
@@ -180,11 +206,8 @@ iStmt Ast.DeclareStatement {ident, maybeExpr} = do
   envDeclare ident value
   return Nothing
 iStmt Ast.BlockStatement {stmts} = do
-  iState <- getState
-  setState (iState {env = emptyEnvironment {parent = Just iState.env}})
-  mapM_ iStmt stmts
-  eState <- getState
-  setState (eState {env = fromJust eState.env.parent})
+  withEnv emptyEnvironment $ do
+    mapM_ iStmt stmts
   return Nothing
 iStmt Ast.IfStatement {condition, then_, else_} = do
   c <- iExpr condition >>= getTruthy
@@ -204,6 +227,20 @@ iStmt whileStmt@Ast.WhileStatement {condition, do_} = do
 iExpr :: Ast.Expression -> Interpreter Value
 iExpr Ast.Literal {value = astValue} = astValueToValue astValue
 iExpr Ast.Grouping {expr} = iExpr expr
+iExpr Ast.Call {f, args} = do
+  fun <- iExpr f
+  case fun of
+    Function {params, body} -> do
+      if length args /= length params
+        then err MismatchArguments
+        else do
+          arguments <- mapM iExpr args
+          argRefs <- liftIO $ mapM newIORef arguments
+          _ <- withEnv (emptyEnvironment {vars = Map.fromList (zip params argRefs)}) $ do
+            iStmt body
+          return Nil
+    _ -> err IncorrectType
+iExpr Ast.Function {params, body} = return Function {params, body}
 iExpr Ast.Unary {operator, rhs} = case operator of
   Ast.Minus -> Number . negate <$> (iExpr rhs >>= getNumber)
   Ast.Not -> Boolean . not <$> (iExpr rhs >>= getTruthy)

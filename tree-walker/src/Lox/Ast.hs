@@ -31,6 +31,7 @@ data Expression
   | Unary {operator :: Operator, rhs :: Expression}
   | Assign {ident :: String, expr :: Expression}
   | Call {f :: Expression, args :: [Expression]}
+  | Function {params :: [String], body :: Statement}
   deriving (Show, Eq)
 
 data Operator

@@ -23,8 +23,19 @@ program = many declaration <* eof
 
 declaration :: Parser Ast.Statement
 declaration =
-  declareStatement
+  declareFunStatement
+    <|> declareStatement
     <|> statement
+
+declareFunStatement :: Parser Ast.Statement
+declareFunStatement = do
+  _ <- char T.Fun
+  ident <- identifier
+  params <- parenthesized (optional (identifier `sepBy` char T.Comma) <&> fromMaybe [])
+  body <- block
+  if length params > 255
+    then err "Too many parameters for function"
+    else return Ast.DeclareStatement {ident, maybeExpr = Just (Ast.Function {params, body})}
 
 statement :: Parser Ast.Statement
 statement =
@@ -173,7 +184,7 @@ call =
   try
     ( do
         f <- primary
-        args <- parenthesized (sepBy expression (char T.Comma))
+        args <- parenthesized (optional (expression `sepBy` char T.Comma) <&> fromMaybe [])
         if length args > 255
           then err "Too many args, a maximum of 255 is allowed"
           else return Ast.Call {f, args}
