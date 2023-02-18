@@ -21,6 +21,16 @@ type Parser = Parser' T.Token
 program :: Parser [Ast.Statement]
 program = many declaration <* eof
 
+funDeclaration :: Parser Ast.Statement
+funDeclaration = returnStatement <|> declaration
+
+returnStatement :: Parser Ast.Statement
+returnStatement = do
+  _ <- char T.Return
+  expr <- expression
+  _ <- char T.Semicolon
+  return Ast.ReturnStatement {expr}
+
 declaration :: Parser Ast.Statement
 declaration =
   declareFunStatement
@@ -32,7 +42,7 @@ declareFunStatement = do
   _ <- char T.Fun
   ident <- identifier
   params <- parenthesized (identifier `sepBy` char T.Comma)
-  body <- block
+  body <- funBlock
   if length params > 255
     then err "Too many parameters for function"
     else return Ast.DeclareStatement {ident, maybeExpr = Just (Ast.Function {params, body})}
@@ -99,6 +109,13 @@ block :: Parser Ast.Statement
 block = do
   _ <- char T.LeftBrace
   stmts <- many declaration
+  _ <- char T.RightBrace
+  return Ast.BlockStatement {stmts}
+
+funBlock :: Parser Ast.Statement
+funBlock = do
+  _ <- char T.LeftBrace
+  stmts <- many funDeclaration
   _ <- char T.RightBrace
   return Ast.BlockStatement {stmts}
 

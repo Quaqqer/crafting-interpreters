@@ -14,6 +14,7 @@ data Statement
       { condition :: Expression,
         do_ :: Statement
       }
+  | ReturnStatement { expr :: Expression}
   deriving (Show, Eq)
 
 data Value

@@ -15,11 +15,11 @@ where
 import Control.Monad (ap)
 import Control.Monad.IO.Class
 import Data.Foldable (forM_)
-import Data.Functor (void)
+import Data.Functor (void, ($>))
 import Data.IORef
+import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (fromJust)
 import Lox.Ast qualified as Ast
 
 data Environment = Environment
@@ -49,7 +49,7 @@ environmentAssign ident value env =
         environmentAssign ident value parent >>= (\p -> Just env {parent = Just p})
       Nothing -> Nothing
 
-data State = State
+newtype State = State
   { env :: Environment
   }
 
@@ -70,6 +70,7 @@ instance Show Value where
   show (Boolean False) = "false"
   show (String s) = show s
   show Nil = "nil"
+  show Function {params} = "function(" ++ List.intercalate ", " params ++ ") { ... }"
 
 astValueToValue :: Ast.Value -> Interpreter Value
 astValueToValue (Ast.Number d) = return (Number d)
@@ -192,6 +193,18 @@ withEnv env i = do
   popEnv
   return a
 
+catchErr :: Interpreter a -> (InterpreterError -> Maybe (Interpreter a)) -> Interpreter a
+catchErr i handler =
+  Interpreter
+    ( \state -> do
+        res <- i.run state
+        case res of
+          l@(Left (e, s)) -> case handler e of
+            Just i' -> i'.run s
+            Nothing -> return l
+          r@Right {} -> return r
+    )
+
 iStmt :: Ast.Statement -> Interpreter (Maybe Value)
 iStmt Ast.PrintStatement {expr} = do
   res <- iExpr expr
@@ -223,6 +236,9 @@ iStmt whileStmt@Ast.WhileStatement {condition, do_} = do
       _ <- iStmt do_
       iStmt whileStmt
     else return Nothing
+iStmt Ast.ReturnStatement {expr} = do
+  val <- iExpr expr
+  err (InterruptReturn val)
 
 iExpr :: Ast.Expression -> Interpreter Value
 iExpr Ast.Literal {value = astValue} = astValueToValue astValue
@@ -236,9 +252,12 @@ iExpr Ast.Call {f, args} = do
         else do
           arguments <- mapM iExpr args
           argRefs <- liftIO $ mapM newIORef arguments
-          _ <- withEnv (emptyEnvironment {vars = Map.fromList (zip params argRefs)}) $ do
-            iStmt body
-          return Nil
+          withEnv (emptyEnvironment {vars = Map.fromList (zip params argRefs)}) $ do
+            (iStmt body $> Nil)
+              `catchErr` ( \case
+                             InterruptReturn v -> Just (return v)
+                             _ -> Nothing
+                         )
     _ -> err IncorrectType
 iExpr Ast.Function {params, body} = return Function {params, body}
 iExpr Ast.Unary {operator, rhs} = case operator of
