@@ -40,15 +40,6 @@ environmentGet ident env = case Map.lookup ident env.vars of
 environmentDeclare :: String -> IORef Value -> Environment -> Environment
 environmentDeclare ident value env = env {vars = Map.insert ident value env.vars}
 
-environmentAssign :: String -> IORef Value -> Environment -> Maybe Environment
-environmentAssign ident value env =
-  if Map.member ident env.vars
-    then Just (env {vars = Map.insert ident value env.vars})
-    else case env.parent of
-      Just parent ->
-        environmentAssign ident value parent >>= (\p -> Just env {parent = Just p})
-      Nothing -> Nothing
-
 newtype State = State
   { env :: Environment
   }
@@ -223,14 +214,14 @@ iStmt Ast.BlockStatement {stmts} = do
     mapM_ iStmt stmts
   return Nothing
 iStmt Ast.IfStatement {condition, then_, else_} = do
-  c <- iExpr condition >>= getTruthy
+  c <- iBool condition
   _ <-
     if c
       then void (iStmt then_)
       else forM_ else_ iStmt
   return Nothing
 iStmt whileStmt@Ast.WhileStatement {condition, do_} = do
-  c <- iExpr condition >>= getTruthy
+  c <- iBool condition
   if c
     then do
       _ <- iStmt do_
@@ -261,8 +252,8 @@ iExpr Ast.Call {f, args} = do
     _ -> err IncorrectType
 iExpr Ast.Function {params, body} = return Function {params, body}
 iExpr Ast.Unary {operator, rhs} = case operator of
-  Ast.Minus -> Number . negate <$> (iExpr rhs >>= getNumber)
-  Ast.Not -> Boolean . not <$> (iExpr rhs >>= getTruthy)
+  Ast.Minus -> Number . negate <$> iNumber rhs
+  Ast.Not -> Boolean . not <$> iBool rhs
   _ -> error "Not a unary operator"
 iExpr Ast.Assign {ident, expr} = do
   value <- iExpr expr
