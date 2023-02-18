@@ -1,6 +1,7 @@
 module Lox.Scanner
   ( Scanner,
     scanTokens,
+    scanToken,
     spec,
   )
 where

@@ -8,7 +8,6 @@ where
 import Control.Applicative ((<|>))
 import Control.Monad (unless)
 import Data.Functor (($>), (<&>))
-import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Set qualified as Set
 import Lox.Ast qualified as Ast
@@ -37,7 +36,7 @@ statement =
     <|> block
 
 exprStatement :: Parser Ast.Statement
-exprStatement = Ast.ExpressionStatement <$> expression <* char T.Semicolon
+exprStatement = try (Ast.ExpressionStatement <$> expression <* char T.Semicolon)
 
 forStatement :: Parser Ast.Statement
 forStatement = do
@@ -106,23 +105,25 @@ expression = assign <?> "expression"
 assign :: Parser Ast.Expression
 assign = do
   let self =
-        ( do
-            ident <- identifier
-            _ <- char T.Equal
-            expr <- self
-            return Ast.Assign {ident, expr}
-        )
+        try
+          ( do
+              ident <- identifier
+              _ <- char T.Equal
+              expr <- self
+              return Ast.Assign {ident, expr}
+          )
           <|> logicOr
    in self
 
 binaryExpr :: [T.Token] -> Parser Ast.Expression -> Parser Ast.Expression
 binaryExpr ops next = do
   let self lhs =
-        ( do
-            operator <- operators ops
-            rhs <- next
-            self (Ast.Binary {lhs, operator, rhs})
-        )
+        try
+          ( do
+              operator <- operators ops
+              rhs <- next
+              self (Ast.Binary {lhs, operator, rhs})
+          )
           <|> return lhs
    in next >>= self
 
@@ -158,23 +159,25 @@ factor =
 
 unary :: Parser Ast.Expression
 unary =
-  ( do
-      operator <- operators [T.Minus, T.Bang]
-      rhs <- expression
-      return Ast.Unary {operator, rhs}
-  )
+  try
+    ( do
+        operator <- operators [T.Minus, T.Bang]
+        rhs <- expression
+        return Ast.Unary {operator, rhs}
+    )
     <|> call
     <?> "unary"
 
 call :: Parser Ast.Expression
 call =
-  ( do
-      f <- primary
-      args <- parenthesized (sepBy expression (char T.Comma))
-      if length args > 255
-        then err "Too many args, a maximum of 255 is allowed"
-        else return Ast.Call {f, args}
-  )
+  try
+    ( do
+        f <- primary
+        args <- parenthesized (sepBy expression (char T.Comma))
+        if length args > 255
+          then err "Too many args, a maximum of 255 is allowed"
+          else return Ast.Call {f, args}
+    )
     <|> primary
     <?> "call"
 
@@ -260,7 +263,7 @@ shouldSucceedOn' :: Show a => Parser a -> String -> Expectation
 shouldSucceedOn' p s = case parse S.scanTokens s of
   Left err -> expectationFailure ("scanning tokens failed with error:\n" ++ showParseError err)
   Right tokens -> case parse' p (map (.inner) tokens) of
-    Left (err, _) -> expectationFailure ("parsing tokens failed with error:\n" ++ showParseError err)
+    Left state -> expectationFailure ("parsing tokens failed with error:\n" ++ showParseError (getError state))
     Right (a, s) ->
       unless (null s.rest) (expectationFailure ("expected to parse fully but rest is:\n" ++ show s.rest ++ "\nparsed:\n" ++ show a))
 

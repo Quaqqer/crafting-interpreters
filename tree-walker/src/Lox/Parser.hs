@@ -11,6 +11,7 @@ module Lox.Parser
     char,
     eof,
     err,
+    getError,
     getState,
     label,
     lookAhead,
@@ -33,6 +34,7 @@ module Lox.Parser
     surrounded,
     takeWhile,
     token,
+    try,
   )
 where
 
@@ -53,9 +55,9 @@ newtype Parser' t a = Parser
 
 data ParserState t = ParserState
   { rest :: [t],
-    offset :: Int
+    offset :: Int,
+    errors :: [ParseError t]
   }
-  deriving (Show)
 
 data ErrorBundle t = ErrorBundle
   { source :: [t],
@@ -98,35 +100,63 @@ showParseError BasicError {got, expected} =
    in Data.Maybe.fromMaybe "Unknown parse error" msg
 showParseError CustomError {message} = message
 
-type ParseResult t a = Either (ParseError t, ParserState t) (a, ParserState t)
+type ParseResult t a = Either (ParserState t) (a, ParserState t)
 
 parse' :: Parser' t a -> [t] -> ParseResult t a
-parse' p ts = p.run (ParserState {rest = ts, offset = 0})
+parse' p ts = p.run (ParserState {rest = ts, offset = 0, errors = []})
 
-parse :: Parser' t a -> [t] -> Either (ParseError t) a
+getError :: Ord t => ParserState t -> ParseError t
+getError ParserState {errors} =
+  let maxOffset = maximum (map (.offset) errors)
+      maxErrors = filter (\e -> e.offset == maxOffset) errors
+      mergedErrors = mergeErrors maxErrors
+   in bestError mergedErrors
+
+mergeErrors :: Ord t => [ParseError t] -> [ParseError t]
+mergeErrors errs =
+  let (basicErrors, nonBasicErrors) = List.partition (\case BasicError {} -> True; _ -> False) errs
+      mergedBasicErrors = case basicErrors of
+        (e : es) -> [BasicError e.offset e.got (foldl1 Set.union (map (.expected) (e : es)))]
+        [] -> []
+   in mergedBasicErrors <> nonBasicErrors
+
+bestError :: [ParseError t] -> ParseError t
+bestError [e] = e
+bestError (e : es) =
+  let nextBestError = bestError es
+   in case e of
+        c@CustomError {} -> c
+        BasicError {} -> case nextBestError of
+          BasicError {} -> e
+          c@CustomError {} -> c
+bestError [] = error "Expected non empty list"
+
+parse :: Ord t => Parser' t a -> [t] -> Either (ParseError t) a
 parse parser source =
   case parse' parser source of
-    Left (err, _state) -> Left err
+    Left state -> Left (getError state)
     Right (a, _state) -> Right a
 
-parseFile :: Parser' t a -> [t] -> Maybe String -> Either (ErrorBundle t) a
+parseFile :: Ord t => Parser' t a -> [t] -> Maybe String -> Either (ErrorBundle t) a
 parseFile parser source fileName =
   case parser.run
     ( ParserState
         { rest = source,
-          offset = 0
+          offset = 0,
+          errors = []
         }
     ) of
-    Left (error, _state) ->
-      Left
-        ( ErrorBundle
-            { source,
-              error,
-              line = 0,
-              column = 0,
-              fileName
-            }
-        )
+    Left state ->
+      let error = getError state
+       in Left
+            ( ErrorBundle
+                { source,
+                  error,
+                  line = 0,
+                  column = 0,
+                  fileName
+                }
+            )
     Right (a, _state) -> Right a
 
 instance Functor (Parser' t) where
@@ -155,39 +185,18 @@ instance Monad (Parser' t) where
   return = pure
 
 instance (Ord t, Show t) => Alternative (Parser' t) where
-  empty =
-    Parser
-      ( \state ->
-          Left
-            ( BasicError
-                { offset = state.offset,
-                  got = Nothing,
-                  expected = Set.empty
-                },
-              state
-            )
-      )
+  empty = Parser Left
 
   l <|> r =
     Parser
       ( \state -> case l.run state of
           Right ok -> Right ok
-          Left (lErr, lState) -> case r.run state of
-            Right ok -> Right ok
-            Left (rErr, rState) ->
-              Left
-                ( if
-                      | lErr.offset == rErr.offset -> (mergeErr lErr rErr, lState)
-                      | lErr.offset < rErr.offset -> (rErr, rState)
-                      | otherwise -> (lErr, lState)
-                )
+          Left lstate ->
+            ( if lstate.offset == state.offset
+                then r.run lstate
+                else Left lstate
+            )
       )
-    where
-      mergeErr l r =
-        if l.offset == r.offset
-          then -- FIXME: Got are not necessarily equal, that might be a problem
-            l {expected = l.expected `Set.union` r.expected}
-          else error ("Assertion of same lengths failed: " ++ show l ++ show r)
 
 infix 0 <?>
 
@@ -195,12 +204,16 @@ infix 0 <?>
 parser <?> s =
   Parser
     ( \state -> case parser.run state of
-        Left (err, state') ->
-          let ts = List.take (err.offset - state'.offset + 1) state.rest
-           in Left
-                (BasicError state.offset (Just (Tokens ts)) (Set.singleton (Label s)), state')
+        Left state' ->
+          let errs = List.take (length state'.errors - length state.errors) state'.errors
+           in Left state' {errors = map (labeledErr s state) errs <> state.errors}
         Right r -> Right r
     )
+  where
+    labeledErr s state BasicError {offset} =
+      let ts = List.take (offset - state.offset) state.rest
+       in BasicError offset (Just (Tokens ts)) (Set.singleton (Label s))
+    labeledErr _ _ e = e
 
 label :: String -> Parser' t a -> Parser' t a
 label l parser = parser <?> l
@@ -215,13 +228,13 @@ token :: (t -> Maybe a) -> Set (ErrorItem t) -> Parser' t a
 token test expected =
   Parser
     ( \state -> case state.rest of
-        [] -> Left (BasicError {got = Just (Tokens []), expected, offset = state.offset}, state)
+        [] -> Left state {errors = (BasicError {got = Just (Tokens []), expected, offset = state.offset}) : state.errors}
         (c : cs) ->
           case test c of
             Just a ->
               Right (a, state {offset = state.offset + 1, rest = cs})
             Nothing ->
-              Left (BasicError {got = Just (Tokens [c]), expected, offset = state.offset + 1}, state)
+              Left state {errors = (BasicError {got = Just (Tokens [c]), expected, offset = state.offset + 1}) : state.errors}
     )
 
 char :: Eq t => t -> Parser' t t
@@ -247,7 +260,7 @@ many parser =
             (as, state'') = case (many parser).run state' of
               Left _ -> error "Assertion that many always returns a right failed"
               Right r -> r
-        Left _ -> Right ([], state)
+        Left state' -> Right ([], state' {offset = state.offset, rest = state.rest})
     )
 
 some :: Parser' t a -> Parser' t [a]
@@ -267,12 +280,20 @@ lookAhead parser =
         Right (a, _) -> Right (a, state)
     )
 
+try :: Parser' t a -> Parser' t a
+try p =
+  Parser
+    ( \state -> case p.run state of
+        Left state' -> Left state' {offset = state.offset, rest = state.rest}
+        r@(Right _) -> r
+    )
+
 notFollowedBy :: Parser' t a -> Parser' t ()
 notFollowedBy parser =
   Parser
     ( \state -> case parser.run state of
         Left _ -> Right ((), state)
-        Right (_, state) -> Left (BasicError state.offset Nothing Set.empty, state)
+        Right (_, state) -> Left state {errors = BasicError state.offset Nothing Set.empty : state.errors}
     )
 
 surrounded :: Parser' t a -> Parser' t b -> Parser' t c -> Parser' t b
@@ -285,7 +306,15 @@ sepBy p s = do
   return (first : rest)
 
 string :: Eq t => [t] -> Parser' t [t]
-string = foldr (\c -> (<*>) ((:) <$> char c)) (pure [])
+string s =
+  Parser
+    ( \state ->
+        let ts = List.take (length s) state.rest
+            newState = state {offset = state.offset + length ts, rest = drop (length ts) state.rest}
+         in case ts of
+              v | v == s -> Right (s, newState)
+              _ -> Left state {errors = BasicError state.offset (Just (Tokens ts)) (Set.singleton (Tokens s)) : state.errors}
+    )
 
 eof :: Parser' t ()
 eof =
@@ -294,19 +323,21 @@ eof =
         [] -> Right ((), state)
         (c : _) ->
           Left
-            ( BasicError
-                state.offset
-                (Just (Tokens [c]))
-                (Set.singleton (Label "eof")),
-              state
-            )
+            state
+              { errors =
+                  BasicError
+                    (state.offset + 1)
+                    (Just (Tokens [c]))
+                    (Set.singleton (Label "eof"))
+                    : state.errors
+              }
     )
 
 getState :: Parser' t (ParserState t)
 getState = Parser (\state -> Right (state, state))
 
 err :: String -> Parser' t a
-err msg = Parser (\s -> Left (CustomError {offset = s.offset, message = msg}, s))
+err msg = Parser (\s -> Left s {errors = CustomError {offset = s.offset, message = msg} : s.errors})
 
 shouldParse :: Show t => Show a => Eq a => Either (ParseError t) a -> a -> Expectation
 shouldParse (Right l) r = l `shouldBe` r
@@ -362,7 +393,7 @@ spec = describe "Lox.Parser" $ do
   it "gets the deepest error" $ do
     parse
       ( string "aab"
-          <|> (List.singleton <$> (many (char 'a') >> char 'b'))
+          <|> try (List.singleton <$> (many (char 'a') >> char 'b'))
           <|> string "aab"
       )
       "aaaa"
@@ -371,10 +402,10 @@ spec = describe "Lox.Parser" $ do
     parse
       ( string "aa"
           >> ( string "aab"
-                 <|> (List.singleton <$> (many (char 'a') >> char 'b'))
+                 <|> try (List.singleton <$> (many (char 'a') >> char 'b'))
                  <|> string "aab"
              )
           <?> "test"
       )
       "aaaaaac"
-      `shouldFailWithError` "got \"aa\" but expected test"
+      `shouldFailWithError` "got \"aaaaaac\" but expected test"
