@@ -23,6 +23,7 @@ module Lox.Parser
     parseFile,
     satisfy,
     sepBy,
+    sepBy1,
     shouldFailOn,
     shouldFailWithError,
     shouldParse,
@@ -41,11 +42,11 @@ where
 import Control.Applicative (Alternative (empty, (<|>)), Applicative (liftA2))
 import Control.Monad ((>=>))
 import Data.List qualified as List
-import Data.Maybe qualified
 import Data.Set (Set)
 import Data.Set qualified as Set
 import Test.Hspec
 import Prelude hiding (take, takeWhile)
+import Data.Maybe (fromMaybe)
 
 newtype Parser' t a = Parser
   { run ::
@@ -301,9 +302,10 @@ surrounded l p r = l *> p <* r
 
 sepBy :: Parser' t a -> Parser' t b -> Parser' t [a]
 sepBy p s = do
-  first <- p
-  rest <- many (s *> p)
-  return (first : rest)
+  fromMaybe [] <$> optional ((:) <$> p <*> many (s *> p))
+
+sepBy1 :: Parser' t a -> Parser' t b -> Parser' t [a]
+sepBy1 p s = (:) <$> (p <* s) <*> sepBy p s
 
 string :: Eq t => [t] -> Parser' t [t]
 string s =

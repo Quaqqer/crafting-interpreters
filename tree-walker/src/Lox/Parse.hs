@@ -31,7 +31,7 @@ declareFunStatement :: Parser Ast.Statement
 declareFunStatement = do
   _ <- char T.Fun
   ident <- identifier
-  params <- parenthesized (optional (identifier `sepBy` char T.Comma) <&> fromMaybe [])
+  params <- parenthesized (identifier `sepBy` char T.Comma)
   body <- block
   if length params > 255
     then err "Too many parameters for function"
@@ -184,7 +184,7 @@ call =
   try
     ( do
         f <- primary
-        args <- parenthesized (optional (expression `sepBy` char T.Comma) <&> fromMaybe [])
+        args <- parenthesized (expression `sepBy` char T.Comma)
         if length args > 255
           then err "Too many args, a maximum of 255 is allowed"
           else return Ast.Call {f, args}
