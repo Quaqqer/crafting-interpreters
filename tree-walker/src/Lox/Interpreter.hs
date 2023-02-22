@@ -20,6 +20,9 @@ import Data.IORef
 import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map qualified as Map
+import Data.Time (defaultTimeLocale)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format (formatTime)
 import Lox.Ast qualified as Ast
 
 data Environment = Environment
@@ -44,6 +47,8 @@ newtype State = State
   { env :: Environment
   }
 
+type Native = [Value] -> Interpreter Value
+
 data Value
   = Number Double
   | Boolean Bool
@@ -54,6 +59,11 @@ data Value
         -- | A block statement
         body :: Ast.Statement
       }
+  | NativeFunction
+      { name :: String,
+        params :: [String],
+        native :: Native
+      }
 
 instance Show Value where
   show (Number n) = show n
@@ -62,6 +72,7 @@ instance Show Value where
   show (String s) = show s
   show Nil = "nil"
   show Function {params} = "function(" ++ List.intercalate ", " params ++ ") { ... }"
+  show NativeFunction {name, params} = "native " ++ name ++ "(" ++ List.intercalate ", " params ++ ") { ... }"
 
 astValueToValue :: Ast.Value -> Interpreter Value
 astValueToValue (Ast.Number d) = return (Number d)
@@ -70,8 +81,25 @@ astValueToValue (Ast.String s) = return (String s)
 astValueToValue Ast.Nil = return Nil
 astValueToValue (Ast.Identifier ident) = envLookup ident
 
-emptyState :: State
-emptyState = State {env = Environment {vars = Map.empty, parent = Nothing}}
+emptyState :: IO State
+emptyState = do
+  ns <- Map.fromList <$> mapM (\nat -> (nat.name,) <$> newIORef nat) natives
+  return
+    State
+      { env =
+          Environment
+            { vars = ns,
+              parent = Just emptyEnvironment
+            }
+      }
+
+natives :: [Value]
+natives = [NativeFunction "clock" [] clockNative]
+
+clockNative :: Native
+clockNative _ = do
+  time :: Double <- read . formatTime defaultTimeLocale "%s" <$> liftIO getCurrentTime
+  return (Number time)
 
 data InterpreterError
   = DivisionByZero
@@ -249,6 +277,12 @@ iExpr Ast.Call {f, args} = do
                              InterruptReturn v -> Just (return v)
                              _ -> Nothing
                          )
+    NativeFunction {params, native} -> do
+      if length args /= length params
+        then err MismatchArguments
+        else do
+          arguments <- mapM iExpr args
+          native arguments
     _ -> err IncorrectType
 iExpr Ast.Function {params, body} = return Function {params, body}
 iExpr Ast.Unary {operator, rhs} = case operator of

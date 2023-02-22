@@ -2,15 +2,12 @@
 
 module Lox.Lox (runFile, runPrompt) where
 
-import Data.Maybe (fromMaybe)
-import GHC.IO.Exception (ExitCode (ExitFailure))
 import Lox.Ast qualified as Ast
 import Lox.Interpreter qualified as Interpreter
 import Lox.Parse qualified as Parse
 import Lox.Parser qualified as Parser
 import Lox.Scanner (scanTokens)
 import Lox.Token (WithPos (inner))
-import System.Exit (exitWith)
 import System.IO (hFlush, isEOF, stdout)
 
 data RunError
@@ -26,7 +23,8 @@ showRunError (RuntimeError s) = "runtime error: " ++ s
 runFile :: String -> IO ()
 runFile f = do
   source <- readFile f
-  newState <- run Interpreter.emptyState source
+  state <- Interpreter.emptyState
+  newState <- run state source
 
   case newState of
     Left err -> do

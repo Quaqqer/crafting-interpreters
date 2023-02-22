@@ -28,4 +28,5 @@ cli = do
     Just f -> do
       runFile f
     Nothing -> do
-      runPrompt emptyState
+      state <- emptyState
+      runPrompt state
