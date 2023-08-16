@@ -32,10 +32,11 @@ library
 
     build-depends:
         base >=4.7 && <5,
-        containers,
-        hspec,
-        optparse-applicative,
-        time
+        containers >= 0.6.5 && < 0.7,
+        hspec >= 2.11.4 && < 2.12,
+        time >= 1.11.1 && < 1.12,
+        optparse-applicative >= 0.18.1 && < 0.19,
+
 
 executable htreelox
     main-is:            Main.hs
@@ -53,11 +54,7 @@ executable htreelox
 
     build-depends:
         base >=4.7 && <5,
-        containers,
-        hspec,
         htreelox,
-        optparse-applicative,
-        time
 
 test-suite htreelox-test
     type:               exitcode-stdio-1.0
@@ -76,8 +73,5 @@ test-suite htreelox-test
 
     build-depends:
         base >=4.7 && <5,
-        containers,
-        hspec,
+        hspec >= 2.11.4 && < 2.12,
         htreelox,
-        optparse-applicative,
-        time
