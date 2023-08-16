@@ -66,7 +66,7 @@ run state source = do
         Left (err, _) -> return (Left (RuntimeError (show err)))
         Right res -> return (Right res)
 
-parse :: String -> Either RunError [Ast.Statement]
+parse :: String -> Either RunError [Ast.Statement String]
 parse s = case Parser.parse (scanTokens <* Parser.eof) s of
   Left err -> Left (TokenizationError (Parser.showParseError err))
   Right withPosTokens ->

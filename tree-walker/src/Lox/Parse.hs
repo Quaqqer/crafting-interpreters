@@ -18,26 +18,29 @@ import Test.Hspec
 
 type Parser = Parser' T.Token
 
-program :: Parser [Ast.Statement]
+type Statement = Ast.Statement String
+type Expression = Ast.Expression String
+
+program :: Parser [Statement]
 program = many declaration <* eof
 
-funDeclaration :: Parser Ast.Statement
+funDeclaration :: Parser Statement
 funDeclaration = returnStatement <|> declaration
 
-returnStatement :: Parser Ast.Statement
+returnStatement :: Parser Statement
 returnStatement = do
   _ <- char T.Return
   expr <- expression
   _ <- char T.Semicolon
   return Ast.ReturnStatement {expr}
 
-declaration :: Parser Ast.Statement
+declaration :: Parser Statement
 declaration =
   declareFunStatement
     <|> declareStatement
     <|> statement
 
-declareFunStatement :: Parser Ast.Statement
+declareFunStatement :: Parser Statement
 declareFunStatement = do
   _ <- char T.Fun
   ident <- identifier
@@ -47,7 +50,7 @@ declareFunStatement = do
     then err "Too many parameters for function"
     else return Ast.DeclareStatement {ident, maybeExpr = Just (Ast.Function {params, body})}
 
-statement :: Parser Ast.Statement
+statement :: Parser Statement
 statement =
   exprStatement
     <|> forStatement
@@ -56,10 +59,10 @@ statement =
     <|> whileStatement
     <|> block
 
-exprStatement :: Parser Ast.Statement
+exprStatement :: Parser Statement
 exprStatement = try (Ast.ExpressionStatement <$> expression <* char T.Semicolon)
 
-forStatement :: Parser Ast.Statement
+forStatement :: Parser Statement
 forStatement = do
   _ <- char T.For
   _ <- char T.LeftParen
@@ -85,7 +88,7 @@ forStatement = do
           ]
       }
 
-ifStatement :: Parser Ast.Statement
+ifStatement :: Parser Statement
 ifStatement = do
   _ <- char T.If
   _ <- char T.LeftParen
@@ -95,31 +98,31 @@ ifStatement = do
   else_ <- optional (char T.Else *> statement)
   return Ast.IfStatement {condition, then_, else_}
 
-printStatement :: Parser Ast.Statement
+printStatement :: Parser Statement
 printStatement = Ast.PrintStatement <$> (char T.Print *> expression <* char T.Semicolon)
 
-whileStatement :: Parser Ast.Statement
+whileStatement :: Parser Statement
 whileStatement = do
   _ <- char T.While
   condition <- char T.LeftParen *> expression <* char T.RightParen
   do_ <- statement
   return Ast.WhileStatement {condition, do_}
 
-block :: Parser Ast.Statement
+block :: Parser Statement
 block = do
   _ <- char T.LeftBrace
   stmts <- many declaration
   _ <- char T.RightBrace
   return Ast.BlockStatement {stmts}
 
-funBlock :: Parser Ast.Statement
+funBlock :: Parser Statement
 funBlock = do
   _ <- char T.LeftBrace
-  stmts <- many funDeclaration
+  stmts <- many declaration
   _ <- char T.RightBrace
   return Ast.BlockStatement {stmts}
 
-declareStatement :: Parser Ast.Statement
+declareStatement :: Parser Statement
 declareStatement = do
   _ <- char T.Var
   ident <- identifier
@@ -127,10 +130,10 @@ declareStatement = do
   _ <- char T.Semicolon
   return Ast.DeclareStatement {ident, maybeExpr}
 
-expression :: Parser Ast.Expression
+expression :: Parser Expression
 expression = assign <?> "expression"
 
-assign :: Parser Ast.Expression
+assign :: Parser Expression
 assign = do
   let self =
         try
@@ -143,7 +146,7 @@ assign = do
           <|> logicOr
    in self
 
-binaryExpr :: [T.Token] -> Parser Ast.Expression -> Parser Ast.Expression
+binaryExpr :: [T.Token] -> Parser Expression -> Parser Expression
 binaryExpr ops next = do
   let self lhs =
         try
@@ -155,37 +158,37 @@ binaryExpr ops next = do
           <|> return lhs
    in next >>= self
 
-logicOr :: Parser Ast.Expression
+logicOr :: Parser Expression
 logicOr =
   binaryExpr [T.Or] logicAnd
     <?> "or"
 
-logicAnd :: Parser Ast.Expression
+logicAnd :: Parser Expression
 logicAnd =
   binaryExpr [T.And] equality
     <?> "and"
 
-equality :: Parser Ast.Expression
+equality :: Parser Expression
 equality =
   binaryExpr [T.BangEqual, T.EqualEqual] comparison
     <?> "equality"
 
-comparison :: Parser Ast.Expression
+comparison :: Parser Expression
 comparison =
   binaryExpr [T.Less, T.LessEqual, T.Greater, T.GreaterEqual] term
     <?> "comparison"
 
-term :: Parser Ast.Expression
+term :: Parser Expression
 term =
   binaryExpr [T.Minus, T.Plus] factor
     <?> "term"
 
-factor :: Parser Ast.Expression
+factor :: Parser Expression
 factor =
   binaryExpr [T.Star, T.Slash] unary
     <?> "factor"
 
-unary :: Parser Ast.Expression
+unary :: Parser Expression
 unary =
   try
     ( do
@@ -196,7 +199,7 @@ unary =
     <|> call
     <?> "unary"
 
-call :: Parser Ast.Expression
+call :: Parser Expression
 call =
   try
     ( do
@@ -209,10 +212,10 @@ call =
     <|> primary
     <?> "call"
 
-primary :: Parser Ast.Expression
+primary :: Parser Expression
 primary = literal <|> grouping
 
-literal :: Parser Ast.Expression
+literal :: Parser Expression
 literal =
   number
     <|> eString
@@ -221,7 +224,7 @@ literal =
     <|> (Ast.Literal . Ast.Identifier <$> identifier)
     <?> "literal"
 
-number :: Parser Ast.Expression
+number :: Parser Expression
 number =
   token
     ( \case
@@ -230,7 +233,7 @@ number =
     )
     (Set.singleton (Label "number"))
 
-eString :: Parser Ast.Expression
+eString :: Parser Expression
 eString =
   token
     ( \case
@@ -248,17 +251,17 @@ identifier =
     )
     (Set.singleton (Label "identifier"))
 
-bool :: Parser Ast.Expression
+bool :: Parser Expression
 bool =
   ( (char T.TTrue $> Ast.Literal (Ast.Boolean True))
       <|> (char T.FFalse $> Ast.Literal (Ast.Boolean False))
   )
     <?> "boolean"
 
-nil :: Parser Ast.Expression
+nil :: Parser Expression
 nil = char T.Nil $> Ast.Literal Ast.Nil <?> "nil"
 
-grouping :: Parser Ast.Expression
+grouping :: Parser Expression
 grouping = do
   _ <- char T.LeftParen
   expr <- expression

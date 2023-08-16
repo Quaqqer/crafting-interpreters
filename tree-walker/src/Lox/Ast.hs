@@ -1,38 +1,38 @@
 module Lox.Ast where
 
-data Statement
-  = ExpressionStatement {expr :: Expression}
-  | PrintStatement {expr :: Expression}
-  | DeclareStatement {ident :: String, maybeExpr :: Maybe Expression}
-  | BlockStatement {stmts :: [Statement]}
+data Statement i
+  = ExpressionStatement {expr :: Expression i}
+  | PrintStatement {expr :: Expression i}
+  | DeclareStatement {ident :: i, maybeExpr :: Maybe (Expression i)}
+  | BlockStatement {stmts :: [Statement i]}
   | IfStatement
-      { condition :: Expression,
-        then_ :: Statement,
-        else_ :: Maybe Statement
+      { condition :: Expression i,
+        then_ :: Statement i,
+        else_ :: Maybe (Statement i)
       }
   | WhileStatement
-      { condition :: Expression,
-        do_ :: Statement
+      { condition :: Expression i,
+        do_ :: Statement i
       }
-  | ReturnStatement { expr :: Expression}
+  | ReturnStatement {expr :: Expression i}
   deriving (Show, Eq)
 
-data Value
+data Value i
   = Number Double
   | String String
   | Boolean Bool
   | Nil
-  | Identifier String
+  | Identifier i
   deriving (Show, Eq)
 
-data Expression
-  = Binary {lhs :: Expression, operator :: Operator, rhs :: Expression}
-  | Grouping {expr :: Expression}
-  | Literal {value :: Value}
-  | Unary {operator :: Operator, rhs :: Expression}
-  | Assign {ident :: String, expr :: Expression}
-  | Call {f :: Expression, args :: [Expression]}
-  | Function {params :: [String], body :: Statement}
+data Expression i
+  = Binary {lhs :: Expression i, operator :: Operator, rhs :: Expression i}
+  | Grouping {expr :: Expression i}
+  | Literal {value :: Value i}
+  | Unary {operator :: Operator, rhs :: Expression i}
+  | Assign {ident :: i, expr :: Expression i}
+  | Call {f :: Expression i, args :: [Expression i]}
+  | Function {params :: [i], body :: Statement i}
   deriving (Show, Eq)
 
 data Operator

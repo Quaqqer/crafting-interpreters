@@ -32,6 +32,7 @@ library
 
     build-depends:
         base >=4.7 && <5,
+        mtl >= 2.2.2 && < 2.3,
         containers >= 0.6.5 && < 0.7,
         hspec >= 2.11.4 && < 2.12,
         time >= 1.11.1 && < 1.12,

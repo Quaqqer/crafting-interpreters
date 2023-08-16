@@ -57,7 +57,7 @@ data Value
   | Function
       { params :: [String],
         -- | A block statement
-        body :: Ast.Statement
+        body :: Ast.Statement String
       }
   | NativeFunction
       { name :: String,
@@ -74,7 +74,7 @@ instance Show Value where
   show Function {params} = "function(" ++ List.intercalate ", " params ++ ") { ... }"
   show NativeFunction {name, params} = "native " ++ name ++ "(" ++ List.intercalate ", " params ++ ") { ... }"
 
-astValueToValue :: Ast.Value -> Interpreter Value
+astValueToValue :: Ast.Value String -> Interpreter Value
 astValueToValue (Ast.Number d) = return (Number d)
 astValueToValue (Ast.Boolean b) = return (Boolean b)
 astValueToValue (Ast.String s) = return (String s)
@@ -180,13 +180,13 @@ getTruthy Nil = return False
 getTruthy (Boolean b) = return b
 getTruthy _ = return True
 
-iNumber :: Ast.Expression -> Interpreter Double
+iNumber :: Ast.Expression String -> Interpreter Double
 iNumber expr = iExpr expr >>= getNumber
 
-iBool :: Ast.Expression -> Interpreter Bool
+iBool :: Ast.Expression String-> Interpreter Bool
 iBool expr = iExpr expr >>= getTruthy
 
-iStmts :: [Ast.Statement] -> Interpreter (Maybe Value)
+iStmts :: [Ast.Statement String] -> Interpreter (Maybe Value)
 iStmts [s] = iStmt s
 iStmts (s : ss) = do
   _ <- iStmt s
@@ -224,7 +224,7 @@ catchErr i handler =
           r@Right {} -> return r
     )
 
-iStmt :: Ast.Statement -> Interpreter (Maybe Value)
+iStmt :: Ast.Statement String -> Interpreter (Maybe Value)
 iStmt Ast.PrintStatement {expr} = do
   res <- iExpr expr
   liftIO $ print res
@@ -259,7 +259,7 @@ iStmt Ast.ReturnStatement {expr} = do
   val <- iExpr expr
   err (InterruptReturn val)
 
-iExpr :: Ast.Expression -> Interpreter Value
+iExpr :: Ast.Expression String -> Interpreter Value
 iExpr Ast.Literal {value = astValue} = astValueToValue astValue
 iExpr Ast.Grouping {expr} = iExpr expr
 iExpr Ast.Call {f, args} = do

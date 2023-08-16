@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
+
 module Lox.Cli (cli) where
 
 import Lox.Lox (runFile, runPrompt)
