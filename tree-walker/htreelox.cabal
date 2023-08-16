@@ -1,132 +1,83 @@
-cabal-version: 1.12
-
--- This file has been generated from package.yaml by hpack version 0.35.1.
---
--- see: https://github.com/sol/hpack
-
-name:           htreelox
-version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/Quaqqer/crafting-interpreters/tree/master/tree-walker#readme>
-homepage:       https://github.com/Quaqqer/crafting-interpreters#readme
-bug-reports:    https://github.com/Quaqqer/crafting-interpreters/issues
-author:         Emanuel S
-maintainer:     emanuel@empa.xyz
-build-type:     Simple
-
-source-repository head
-  type: git
-  location: https://github.com/Quaqqer/crafting-interpreters
-  subdir: tree-walker
+cabal-version: 3.4
+name:          htreelox
+version:       0.1.0.0
+maintainer:    emanuel@empa.xyz
+author:        Emanuel S.
+description:   A tree walker implementation of Lox
+category:      Development
+build-type:    Simple
 
 library
-  exposed-modules:
-      Lox.Ast
-      Lox.Cli
-      Lox.Interpreter
-      Lox.Lox
-      Lox.Parse
-      Lox.Parser
-      Lox.Scanner
-      Lox.Token
-  other-modules:
-      Paths_htreelox
-  hs-source-dirs:
-      src
-  default-extensions:
-      OverloadedStrings
-      DisambiguateRecordFields
-      DuplicateRecordFields
-      LambdaCase
-      MultiWayIf
-      NamedFieldPuns
-      RecordWildCards
-      TupleSections
-      ViewPatterns
-      OverloadedRecordDot
-      NoFieldSelectors
-      ScopedTypeVariables
-      FlexibleContexts
-      FlexibleInstances
-      ImportQualifiedPost
-      QuantifiedConstraints
-      StandaloneDeriving
-      DeriveFunctor
-  ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing
-  build-depends:
-      base >=4.7 && <5
-    , containers
-    , hspec
-    , optparse-applicative
-    , time
-  default-language: Haskell2010
+    exposed-modules:
+        Lox.Ast
+        Lox.Cli
+        Lox.Interpreter
+        Lox.Lox
+        Lox.Parse
+        Lox.Parser
+        Lox.Scanner
+        Lox.Token
+
+    hs-source-dirs:     src
+    default-language:   GHC2021
+    default-extensions:
+        OverloadedStrings DisambiguateRecordFields DuplicateRecordFields
+        OverloadedRecordDot LambdaCase MultiWayIf RecordWildCards
+        ViewPatterns NoFieldSelectors
+
+    ghc-options:
+        -Wall -Wcompat -Widentities -Wincomplete-record-updates
+        -Wincomplete-uni-patterns -Wmissing-home-modules
+        -Wredundant-constraints -Wno-name-shadowing
+
+    build-depends:
+        base >=4.7 && <5,
+        containers,
+        hspec,
+        optparse-applicative,
+        time
 
 executable htreelox
-  main-is: Main.hs
-  other-modules:
-      Paths_htreelox
-  hs-source-dirs:
-      app
-  default-extensions:
-      OverloadedStrings
-      DisambiguateRecordFields
-      DuplicateRecordFields
-      LambdaCase
-      MultiWayIf
-      NamedFieldPuns
-      RecordWildCards
-      TupleSections
-      ViewPatterns
-      OverloadedRecordDot
-      NoFieldSelectors
-      ScopedTypeVariables
-      FlexibleContexts
-      FlexibleInstances
-      ImportQualifiedPost
-      QuantifiedConstraints
-      StandaloneDeriving
-      DeriveFunctor
-  ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , containers
-    , hspec
-    , htreelox
-    , optparse-applicative
-    , time
-  default-language: Haskell2010
+    main-is:            Main.hs
+    hs-source-dirs:     app
+    default-language:   GHC2021
+    default-extensions:
+        OverloadedStrings DisambiguateRecordFields DuplicateRecordFields
+        OverloadedRecordDot LambdaCase MultiWayIf RecordWildCards
+        ViewPatterns NoFieldSelectors
+
+    ghc-options:
+        -Wall -Wcompat -Widentities -Wincomplete-record-updates
+        -Wincomplete-uni-patterns -Wmissing-home-modules
+        -Wredundant-constraints -Wno-name-shadowing
+
+    build-depends:
+        base >=4.7 && <5,
+        containers,
+        hspec,
+        htreelox,
+        optparse-applicative,
+        time
 
 test-suite htreelox-test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-      Paths_htreelox
-  hs-source-dirs:
-      test
-  default-extensions:
-      OverloadedStrings
-      DisambiguateRecordFields
-      DuplicateRecordFields
-      LambdaCase
-      MultiWayIf
-      NamedFieldPuns
-      RecordWildCards
-      TupleSections
-      ViewPatterns
-      OverloadedRecordDot
-      NoFieldSelectors
-      ScopedTypeVariables
-      FlexibleContexts
-      FlexibleInstances
-      ImportQualifiedPost
-      QuantifiedConstraints
-      StandaloneDeriving
-      DeriveFunctor
-  ghc-options: -Wall -Wcompat -Widentities -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base >=4.7 && <5
-    , containers
-    , hspec
-    , htreelox
-    , optparse-applicative
-    , time
-  default-language: Haskell2010
+    type:               exitcode-stdio-1.0
+    main-is:            Spec.hs
+    hs-source-dirs:     test
+    default-language:   GHC2021
+    default-extensions:
+        OverloadedStrings DisambiguateRecordFields DuplicateRecordFields
+        OverloadedRecordDot LambdaCase MultiWayIf RecordWildCards
+        ViewPatterns NoFieldSelectors
+
+    ghc-options:
+        -Wall -Wcompat -Widentities -Wincomplete-record-updates
+        -Wincomplete-uni-patterns -Wmissing-home-modules
+        -Wredundant-constraints -Wno-name-shadowing
+
+    build-depends:
+        base >=4.7 && <5,
+        containers,
+        hspec,
+        htreelox,
+        optparse-applicative,
+        time
