@@ -13,10 +13,11 @@ import Lox.Ast (Statement (..))
 import Lox.Ast qualified as Ast
 
 data State = State
-  { scopes :: [Scope]
+  { scopes :: [Scope],
+    counter :: Int
   }
 
-type Scope = Map String Ident
+type Scope = Map String Int
 
 data Err
 
@@ -29,7 +30,7 @@ data Ident
 runResolver :: [Ast.Statement String] -> Either Err [Ast.Statement Ident]
 runResolver ast = Except.runExcept $ State.evalStateT (resolver ast) s
   where
-    s = State {scopes = []}
+    s = State {scopes = [], counter = 0}
 
 resolver :: [Ast.Statement String] -> Resolver [Ast.Statement Ident]
 resolver = mapM resolveStatement
@@ -114,7 +115,25 @@ resolveValue Ast.Nil = return Ast.Nil
 resolveValue (Ast.Identifier i) = Ast.Identifier <$> resolveIdent i
 
 insertIdent :: String -> Resolver Ident
-insertIdent = undefined
+insertIdent ident = do
+  s <- State.get
+  case s.scopes of
+    [] -> return $ Global ident
+    (f : fs) -> do
+      let i = s.counter
+      let f' = Map.insert ident i f
+      State.put s {scopes = f' : fs, counter = i + 1}
+      return (Local i)
 
 resolveIdent :: String -> Resolver Ident
-resolveIdent = undefined
+resolveIdent ident = do
+  s <- State.get
+  return $ case r s.scopes of
+    Just i -> Local i
+    Nothing -> Global ident
+  where
+    r :: [Scope] -> Maybe Int
+    r [] = Nothing
+    r (s : ss) = case Map.lookup ident s of
+      Just i -> Just i
+      Nothing -> r ss
