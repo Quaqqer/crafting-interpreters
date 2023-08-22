@@ -24,7 +24,7 @@ data Err
 type Resolver = State.StateT State (Except.Except Err)
 
 data Ident
-  = Local Int
+  = Local {id :: Int, depth :: Int}
   | Global String
 
 runResolver :: [Ast.Statement String] -> Either Err [Ast.Statement Ident]
@@ -123,17 +123,15 @@ insertIdent ident = do
       let i = s.counter
       let f' = Map.insert ident i f
       State.put s {scopes = f' : fs, counter = i + 1}
-      return (Local i)
+      return (Local {id = i, depth = 0})
 
 resolveIdent :: String -> Resolver Ident
 resolveIdent ident = do
   s <- State.get
-  return $ case r s.scopes of
-    Just i -> Local i
-    Nothing -> Global ident
+  return (r s.scopes 0)
   where
-    r :: [Scope] -> Maybe Int
-    r [] = Nothing
-    r (s : ss) = case Map.lookup ident s of
-      Just i -> Just i
-      Nothing -> r ss
+    r :: [Scope] -> Int -> Ident
+    r [] _ = Global ident
+    r (s : ss) d = case Map.lookup ident s of
+      Just i -> Local {depth = d, id = i}
+      Nothing -> r ss (d + 1)
