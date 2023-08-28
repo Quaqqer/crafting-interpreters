@@ -27,6 +27,11 @@ impl Chunk {
                 let offset = self.code[offset + 1];
                 Ok((Op::Constant(offset), 2))
             }
+            Opcode::Negate => Ok((Op::Negate, 1)),
+            Opcode::Add => Ok((Op::Add, 1)),
+            Opcode::Subtract => Ok((Op::Subtract, 1)),
+            Opcode::Multiply => Ok((Op::Multiply, 1)),
+            Opcode::Divide => Ok((Op::Divide, 1)),
         }
     }
 
@@ -37,6 +42,11 @@ impl Chunk {
                 self.add_code(u8::from(Opcode::Constant), line);
                 self.add_code(offset, line);
             }
+            Op::Negate => self.add_code(u8::from(Opcode::Negate), line),
+            Op::Add => self.add_code(u8::from(Opcode::Add), line),
+            Op::Subtract => self.add_code(u8::from(Opcode::Subtract), line),
+            Op::Multiply => self.add_code(u8::from(Opcode::Multiply), line),
+            Op::Divide => self.add_code(u8::from(Opcode::Divide), line),
         }
     }
 
@@ -76,9 +86,11 @@ impl std::fmt::Display for Chunk {
             }
 
             match op {
-                Op::Constant(offset) => {
-                    write!(f, "CONSTANT {} ({})", offset, self.constants[offset as usize])?
-                }
+                Op::Constant(offset) => write!(
+                    f,
+                    "CONSTANT {} ({})",
+                    offset, self.constants[offset as usize]
+                )?,
                 _ => write!(f, "{}", op)?,
             };
 

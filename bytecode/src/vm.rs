@@ -50,6 +50,44 @@ impl VM {
                     let v = self.chunk.read_constant(offset).unwrap().clone();
                     self.push(v);
                 }
+                Op::Negate => {
+                    let v = self.pop();
+                    match v {
+                        Value::Float(f) => self.push(Value::Float(-f)),
+                    }
+                }
+                Op::Add => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (rhs, lhs) {
+                        (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                    };
+                    self.push(res);
+                }
+                Op::Subtract => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (rhs, lhs) {
+                        (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                    };
+                    self.push(res);
+                }
+                Op::Multiply => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (rhs, lhs) {
+                        (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                    };
+                    self.push(res);
+                }
+                Op::Divide => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (rhs, lhs) {
+                        (Value::Float(l), Value::Float(r)) => Value::Float(l / r),
+                    };
+                    self.push(res);
+                }
             }
         }
 

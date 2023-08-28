@@ -1,6 +1,11 @@
 pub enum Opcode {
     Return,
     Constant,
+    Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl From<Opcode> for u8 {
@@ -8,6 +13,11 @@ impl From<Opcode> for u8 {
         match value {
             Opcode::Return => 0,
             Opcode::Constant => 1,
+            Opcode::Negate => 2,
+            Opcode::Add => 3,
+            Opcode::Subtract => 4,
+            Opcode::Multiply => 5,
+            Opcode::Divide => 6,
         }
     }
 }
@@ -17,6 +27,11 @@ impl From<u8> for Opcode {
         match value {
             0 => Opcode::Return,
             1 => Opcode::Constant,
+            2 => Opcode::Negate,
+            3 => Opcode::Add,
+            4 => Opcode::Subtract,
+            5 => Opcode::Multiply,
+            6 => Opcode::Divide,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -25,13 +40,23 @@ impl From<u8> for Opcode {
 pub enum Op {
     Return,
     Constant(u8),
+    Negate,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
 }
 
 impl std::fmt::Display for Op {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Return => write!(f, "RETURN"),
-            Self::Constant(offset) => write!(f, "CONSTANT {}", offset),
+            Op::Return => write!(f, "RETURN"),
+            Op::Constant(offset) => write!(f, "CONSTANT {}", offset),
+            Op::Negate => write!(f, "NEGATE"),
+            Op::Add => write!(f, "Add"),
+            Op::Subtract => write!(f, "Subtract"),
+            Op::Multiply => write!(f, "Mulyiply"),
+            Op::Divide => write!(f, "Divide"),
         }
     }
 }
