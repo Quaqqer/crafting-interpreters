@@ -50,6 +50,14 @@ impl Chunk {
         self.constants.push(v);
         i as u8
     }
+
+    pub fn read_constant(&mut self, offset: u8) -> Option<&Value> {
+        self.constants.get(offset as usize)
+    }
+
+    pub fn len(&self) -> usize {
+        self.code.len()
+    }
 }
 
 impl std::fmt::Display for Chunk {
