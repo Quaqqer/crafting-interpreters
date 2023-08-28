@@ -37,6 +37,7 @@ impl From<u8> for Opcode {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Op {
     Return,
     Constant(u8),
@@ -53,10 +54,10 @@ impl std::fmt::Display for Op {
             Op::Return => write!(f, "RETURN"),
             Op::Constant(offset) => write!(f, "CONSTANT {}", offset),
             Op::Negate => write!(f, "NEGATE"),
-            Op::Add => write!(f, "Add"),
-            Op::Subtract => write!(f, "Subtract"),
-            Op::Multiply => write!(f, "Mulyiply"),
-            Op::Divide => write!(f, "Divide"),
+            Op::Add => write!(f, "ADD"),
+            Op::Subtract => write!(f, "SUBTRACT"),
+            Op::Multiply => write!(f, "MULTIPLY"),
+            Op::Divide => write!(f, "DIVIDE"),
         }
     }
 }

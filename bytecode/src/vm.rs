@@ -25,7 +25,7 @@ impl VM {
             return Ok(None);
         }
 
-        match self.chunk.decode_instruction(self.ii) {
+        match self.chunk.decode_op(self.ii) {
             Ok((op, d)) => {
                 self.ii += d;
                 Ok(Some(op))
@@ -100,5 +100,78 @@ impl VM {
 
     fn pop(&mut self) -> Value {
         self.stack.pop().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{chunk::Chunk, op::Op, value::Value, vm::VM};
+    use pretty_assertions::assert_eq;
+
+    fn create_chunk(constants: Vec<Value>, ops: Vec<Op>) -> Chunk {
+        let mut chunk = Chunk::new();
+        for c in constants {
+            chunk.add_constant(c);
+        }
+        for op in ops {
+            chunk.add_op(op, 0);
+        }
+        chunk
+    }
+
+    fn test_vm(constants: Vec<Value>, ops: Vec<Op>, stack: Vec<Value>) {
+        let chunk = create_chunk(constants, ops);
+        let mut vm = VM::new(chunk);
+        vm.run().unwrap();
+        assert_eq!(vm.stack, stack);
+    }
+
+    #[test]
+    #[should_panic]
+    fn wrong_res() {
+        test_vm(
+            vec![Value::Float(1.)],
+            vec![Op::Constant(0)],
+            vec![Value::Float(0.)],
+        )
+    }
+
+    #[test]
+    fn basic_ops() {
+        test_vm(
+            vec![Value::Float(0.)],
+            vec![Op::Constant(0)],
+            vec![Value::Float(0.)],
+        );
+
+        test_vm(
+            vec![Value::Float(1.)],
+            vec![Op::Constant(0), Op::Negate],
+            vec![Value::Float(-1.)],
+        );
+
+        test_vm(
+            vec![Value::Float(1.)],
+            vec![Op::Constant(0), Op::Constant(0), Op::Add],
+            vec![Value::Float(2.)],
+        );
+
+        test_vm(
+            vec![Value::Float(1.)],
+            vec![Op::Constant(0), Op::Constant(0), Op::Subtract],
+            vec![Value::Float(0.)],
+        );
+
+        test_vm(
+            vec![Value::Float(2.)],
+            vec![Op::Constant(0), Op::Constant(0), Op::Multiply],
+            vec![Value::Float(4.)],
+        );
+
+        test_vm(
+            vec![Value::Float(2.)],
+            vec![Op::Constant(0), Op::Constant(0), Op::Divide],
+            vec![Value::Float(1.)],
+        );
     }
 }

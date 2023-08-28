@@ -18,7 +18,7 @@ impl Chunk {
         }
     }
 
-    pub fn decode_instruction(&self, offset: usize) -> Result<(Op, usize), ()> {
+    pub fn decode_op(&self, offset: usize) -> Result<(Op, usize), ()> {
         let opcode = Opcode::from(self.code[offset]);
 
         match opcode {
@@ -33,6 +33,18 @@ impl Chunk {
             Opcode::Multiply => Ok((Op::Multiply, 1)),
             Opcode::Divide => Ok((Op::Divide, 1)),
         }
+    }
+
+    pub fn decode_ops(&self) -> Result<Vec<Op>, ()> {
+        let mut offset = 0;
+        let mut ops = Vec::new();
+        while offset < self.code.len() {
+            let (op, len) = self.decode_op(offset)?;
+            offset += len;
+            ops.push(op);
+        }
+
+        Ok(ops)
     }
 
     pub fn add_op(&mut self, op: Op, line: i32) {
@@ -72,10 +84,11 @@ impl Chunk {
 
 impl std::fmt::Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ops = self.decode_ops();
         let mut offset = 0;
 
         while offset < self.code.len() {
-            let (op, len) = self.decode_instruction(offset).unwrap();
+            let (op, len) = self.decode_op(offset).unwrap();
 
             write!(f, "{:04} ", offset)?;
 
@@ -102,5 +115,67 @@ impl std::fmt::Display for Chunk {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{op::Op, value::Value};
+    use pretty_assertions::assert_eq;
+
+    use super::Chunk;
+
+    #[test]
+    fn encode_decode() {
+        let mut c = Chunk::new();
+
+        c.add_constant(Value::Float(0.));
+        assert_eq!(c.constants, vec![Value::Float(0.)]);
+
+        c.add_op(Op::Return, 0);
+        c.add_op(Op::Constant(0), 0);
+        c.add_op(Op::Negate, 0);
+        c.add_op(Op::Add, 0);
+        c.add_op(Op::Subtract, 0);
+        c.add_op(Op::Multiply, 0);
+        c.add_op(Op::Divide, 0);
+
+        let ops = c.decode_ops().unwrap();
+        assert_eq!(
+            ops,
+            vec![
+                Op::Return,
+                Op::Constant(0),
+                Op::Negate,
+                Op::Add,
+                Op::Subtract,
+                Op::Multiply,
+                Op::Divide
+            ]
+        );
+    }
+
+    #[test]
+    fn print() {
+        let mut c = Chunk::new();
+        c.add_constant(Value::Float(0.));
+        c.add_op(Op::Return, 0);
+        c.add_op(Op::Constant(0), 0);
+        c.add_op(Op::Negate, 0);
+        c.add_op(Op::Add, 0);
+        c.add_op(Op::Subtract, 0);
+        c.add_op(Op::Multiply, 0);
+        c.add_op(Op::Divide, 0);
+
+        assert_eq!(
+            format!("{}", c),
+            "0000    0 RETURN
+0001    | CONSTANT 0 (0)
+0003    | NEGATE
+0004    | ADD
+0005    | SUBTRACT
+0006    | MULTIPLY
+0007    | DIVIDE"
+        );
     }
 }
