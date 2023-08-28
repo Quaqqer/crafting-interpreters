@@ -1,4 +1,9 @@
-use crate::{chunk::Chunk, op::Op, value::Value};
+use crate::{
+    chunk::Chunk,
+    compiler::{self, Compiler},
+    op::Op,
+    value::Value,
+};
 
 pub struct VM {
     chunk: Chunk,
@@ -8,13 +13,14 @@ pub struct VM {
 
 #[derive(Debug)]
 pub enum Error {
-    DecodeError,
+    CompileError(compiler::Error),
+    DecodeError(String),
 }
 
 impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new() -> Self {
         Self {
-            chunk,
+            chunk: Chunk::new(),
             ii: 0,
             stack: Vec::new(),
         }
@@ -30,11 +36,17 @@ impl VM {
                 self.ii += d;
                 Ok(Some(op))
             }
-            Err(_) => Err(Error::DecodeError),
+            Err(_) => Err(Error::DecodeError(format!(
+                "Could not decode op at index {}",
+                self.ii,
+            ))),
         }
     }
 
-    pub fn run(&mut self) -> Result<(), Error> {
+    pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Error> {
+        self.chunk = chunk;
+        self.ii = 0;
+
         while let Some(op) = self.fetch()? {
             #[cfg(feature = "debug_trace")]
             {
@@ -94,6 +106,14 @@ impl VM {
         Ok(())
     }
 
+    pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
+        let res = Compiler::new()
+            .compile(source)
+            .map_err(|e| Error::CompileError(e));
+        println!("{:?}", res);
+        todo!()
+    }
+
     fn push(&mut self, v: Value) {
         self.stack.push(v)
     }
@@ -121,8 +141,8 @@ mod tests {
 
     fn test_vm(constants: Vec<Value>, ops: Vec<Op>, stack: Vec<Value>) {
         let chunk = create_chunk(constants, ops);
-        let mut vm = VM::new(chunk);
-        vm.run().unwrap();
+        let mut vm = VM::new();
+        vm.interpret(chunk).unwrap();
         assert_eq!(vm.stack, stack);
     }
 

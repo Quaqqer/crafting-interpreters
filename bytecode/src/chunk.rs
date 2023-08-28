@@ -3,6 +3,7 @@ use crate::{
     value::Value,
 };
 
+#[derive(Debug)]
 pub struct Chunk {
     code: Vec<u8>,
     constants: Vec<Value>,
