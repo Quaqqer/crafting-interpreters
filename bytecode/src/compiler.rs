@@ -25,6 +25,39 @@ pub enum ErrorKind {
     Expected(&'static str),
 }
 
+#[derive(PartialEq, PartialOrd)]
+enum Prec {
+    None,
+    Assignment,
+    Or,
+    And,
+    Equality,
+    Comparison,
+    Term,
+    Factor,
+    Unary,
+    Call,
+    Primary,
+}
+
+impl Prec {
+    pub fn next(&self) -> Self {
+        match self {
+            Prec::None => Prec::Assignment,
+            Prec::Assignment => Prec::Or,
+            Prec::Or => Prec::And,
+            Prec::And => Prec::Equality,
+            Prec::Equality => Prec::Comparison,
+            Prec::Comparison => Prec::Term,
+            Prec::Term => Prec::Factor,
+            Prec::Factor => Prec::Unary,
+            Prec::Unary => Prec::Call,
+            Prec::Call => Prec::Primary,
+            Prec::Primary => unreachable!(),
+        }
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.at {
@@ -124,7 +157,7 @@ impl Compiler {
         Ok(compiler.chunk)
     }
 
-    fn expression(&mut self) -> Result<(), Error> {
+    fn precedence(&mut self, prec: Prec) -> Result<(), Error> {
         let t = self.advance()?;
         match t.kind {
             TokenKind::LParen => self.grouping(),
@@ -132,6 +165,27 @@ impl Compiler {
             TokenKind::Minus => self.unary(t),
             _ => self.make_error(t, ErrorKind::Expected("expression")),
         }
+    }
+
+    fn binary(&mut self) -> Result<(), Error> {
+        let t = self.advance()?;
+        let operator = &t.kind;
+        let rule = self.rule(operator.clone());
+        self.precedence(rule.next())?;
+
+        match operator {
+            TokenKind::Plus => self.emit(&t, Op::Add),
+            TokenKind::Minus => self.emit(&t, Op::Subtract),
+            TokenKind::Star => self.emit(&t, Op::Multiply),
+            TokenKind::Slash => self.emit(&t, Op::Divide),
+            _ => unreachable!(),
+        };
+
+        Ok(())
+    }
+
+    fn expression(&mut self) -> Result<(), Error> {
+        self.precedence(Prec::Assignment)
     }
 
     fn grouping(&mut self) -> Result<(), Error> {
@@ -157,5 +211,9 @@ impl Compiler {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn rule(&self, operator: TokenKind) -> Prec {
+        todo!()
     }
 }
