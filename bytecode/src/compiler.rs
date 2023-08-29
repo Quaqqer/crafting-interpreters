@@ -3,59 +3,54 @@ use crate::{
     op::Op,
     scanner::Scanner,
     token::{Token, TokenKind},
+    value::Value,
 };
 
 pub struct Compiler {
-    prev: Option<Token>,
-    current: Option<Token>,
+    peek: Option<Token>,
     scanner: Scanner,
     chunk: Chunk,
 }
 
 #[derive(Debug)]
 pub struct Error {
-    at: Option<Token>,
+    at: Token,
     kind: ErrorKind,
 }
 
 #[derive(Debug)]
 pub enum ErrorKind {
     ScanError,
-    Expected(TokenKind),
+    ExpectedToken(TokenKind),
+    Expected(&'static str),
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.at {
-            Some(Token { line, .. }) => write!(f, "[line {}]", line)?,
-            None => write!(f, "[line ?]")?,
+            Token { line, .. } => write!(f, "[line {}]", line)?,
         }
 
         write!(f, " Error")?;
 
         match &self.at {
-            Some(Token {
+            Token {
                 kind: TokenKind::EOF,
                 ..
-            }) => write!(f, " at end:\n")?,
-            Some(Token { source, .. }) => write!(f, " at '{}':\n", source)?,
-            None => write!(f, ":\n")?,
+            } => write!(f, " at end:\n")?,
+            Token { source, .. } => write!(f, " at '{}':\n", source)?,
         }
 
         match &self.kind {
-            ErrorKind::ScanError => match self.at.as_ref().unwrap().kind {
+            ErrorKind::ScanError => match self.at.kind {
                 TokenKind::UnknownChar => write!(f, "Unknown character"),
                 TokenKind::UnterminatedString => write!(f, "Unterminated string"),
                 _ => unreachable!(),
             },
-            ErrorKind::Expected(expected) => {
-                write!(
-                    f,
-                    "Expected {} but got {}",
-                    expected,
-                    &self.at.as_ref().unwrap().kind
-                )
+            ErrorKind::ExpectedToken(expected) => {
+                write!(f, "Expected {} but got {}", expected, &self.at.kind)
             }
+            ErrorKind::Expected(s) => write!(f, "Expected {} but got {}", s, self.at.kind),
         }
     }
 }
@@ -63,57 +58,61 @@ impl std::fmt::Display for Error {
 impl Compiler {
     fn new(src: &str) -> Self {
         Compiler {
-            current: None,
-            prev: None,
+            peek: None,
             scanner: Scanner::new(src),
             chunk: Chunk::new(),
         }
     }
 
-    fn advance(&mut self) -> Result<(), Error> {
-        let next_token = self.scanner.scan_token();
+    fn peek(&mut self) -> Result<&Token, Error> {
+        if self.peek.is_none() {
+            self.peek = Some(self.advance()?);
+        }
+        Ok(self.peek.as_ref().unwrap())
+    }
 
-        match &next_token {
+    fn advance(&mut self) -> Result<Token, Error> {
+        self.peek = None;
+
+        let t = self.scanner.scan_token();
+
+        match &t {
             Token { kind, .. } => match kind {
                 TokenKind::UnknownChar | TokenKind::UnterminatedString => {
-                    return self.make_error(ErrorKind::ScanError)
+                    return self.make_error(t, ErrorKind::ScanError)
                 }
                 _ => {}
             },
         }
-
-        self.prev = self.current.take();
-        self.current = Some(next_token);
-        Ok(())
+        Ok(t)
     }
 
-    fn make_error<T>(&self, kind: ErrorKind) -> Result<T, Error> {
-        Err(Error {
-            at: self.current.clone(),
-            kind,
-        })
+    fn make_error<T>(&self, at: Token, kind: ErrorKind) -> Result<T, Error> {
+        Err(Error { at, kind })
     }
 
-    fn consume(&mut self, kind: TokenKind) -> Result<(), Error> {
-        if self.current.as_ref().unwrap().kind == kind {
-            self.advance()?;
-            Ok(())
+    fn consume(&mut self, kind: TokenKind) -> Result<Token, Error> {
+        let next = self.advance()?;
+        if next.kind == kind {
+            Ok(next)
         } else {
-            Err(Error {
-                at: self.current.clone(),
-                kind: ErrorKind::Expected(kind),
-            })
+            self.make_error(next, ErrorKind::ExpectedToken(kind))
         }
     }
 
-    fn emit(&mut self, op: Op) {
-        self.chunk.add_op(op, self.current.as_ref().unwrap().line);
+    fn emit(&mut self, token: &Token, op: Op) {
+        self.chunk.add_op(op, token.line);
+    }
+
+    fn emit_constant(&mut self, v: Value) -> u8 {
+        self.chunk.add_constant(v)
     }
 
     fn run(&mut self) -> Result<(), Error> {
-        self.advance()?;
-        self.consume(TokenKind::EOF)?;
-        self.emit(Op::Return);
+        self.expression()?;
+
+        let t = self.consume(TokenKind::EOF)?;
+        self.emit(&t, Op::Return);
 
         Ok(())
     }
@@ -123,5 +122,40 @@ impl Compiler {
         compiler.run()?;
 
         Ok(compiler.chunk)
+    }
+
+    fn expression(&mut self) -> Result<(), Error> {
+        let t = self.advance()?;
+        match t.kind {
+            TokenKind::LParen => self.grouping(),
+            TokenKind::Number => self.number(t),
+            TokenKind::Minus => self.unary(t),
+            _ => self.make_error(t, ErrorKind::Expected("expression")),
+        }
+    }
+
+    fn grouping(&mut self) -> Result<(), Error> {
+        self.expression()?;
+        self.consume(TokenKind::RParen)?;
+        Ok(())
+    }
+
+    fn number(&mut self, t: Token) -> Result<(), Error> {
+        let number: f64 = t.source.parse().unwrap();
+        let constant = self.emit_constant(Value::Float(number));
+        self.emit(&t, Op::Constant(constant));
+        Ok(())
+    }
+
+    fn unary(&mut self, t: Token) -> Result<(), Error> {
+        let operator = &t.kind;
+        self.expression()?;
+        match operator {
+            TokenKind::Minus => {
+                self.emit(&t, Op::Negate);
+                Ok(())
+            }
+            _ => unreachable!(),
+        }
     }
 }

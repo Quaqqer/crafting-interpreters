@@ -1,4 +1,4 @@
-use std::{io::Write, process::exit};
+use std::{io::Write, process};
 
 use clap::Parser;
 
@@ -20,20 +20,23 @@ pub fn cli() {
     }
 }
 
-fn interpret(vm: &mut VM, s: &str) {
+fn interpret(vm: &mut VM, s: &str, exit: bool) {
     let res = vm.interpret_str(s);
-    match res {
-        Ok(_) => todo!(),
-        Err(e) => match e {
+    if let Err(e) = res {
+        match e {
             crate::vm::Error::CompileError(msg) => {
                 eprintln!("{}", msg);
-                exit(65);
+                if exit {
+                    process::exit(65);
+                }
             }
             crate::vm::Error::DecodeError(msg) => {
                 eprintln!("{}", msg);
-                exit(70);
+                if exit {
+                    process::exit(70);
+                }
             }
-        },
+        }
     };
 }
 
@@ -54,12 +57,12 @@ pub fn repl() {
             return;
         }
 
-        interpret(&mut vm, line.as_str());
+        interpret(&mut vm, line.as_str(), false);
     }
 }
 
 pub fn run_file(path: &str) {
     let mut vm = VM::new();
     let source = std::fs::read_to_string(path).unwrap();
-    interpret(&mut vm, &source);
+    interpret(&mut vm, &source, true);
 }
