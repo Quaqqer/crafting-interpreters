@@ -7,7 +7,7 @@ use crate::{
 pub struct Chunk {
     code: Vec<u8>,
     constants: Vec<Value>,
-    lines: Vec<i32>,
+    lines: Vec<u32>,
 }
 
 impl Chunk {
@@ -48,7 +48,7 @@ impl Chunk {
         Ok(ops)
     }
 
-    pub fn add_op(&mut self, op: Op, line: i32) {
+    pub fn add_op(&mut self, op: Op, line: u32) {
         match op {
             Op::Return => self.add_code(u8::from(Opcode::Return), line),
             Op::Constant(offset) => {
@@ -63,7 +63,7 @@ impl Chunk {
         }
     }
 
-    pub fn add_code(&mut self, v: u8, line: i32) {
+    pub fn add_code(&mut self, v: u8, line: u32) {
         self.code.push(v);
         self.lines.push(line);
     }
@@ -85,7 +85,6 @@ impl Chunk {
 
 impl std::fmt::Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ops = self.decode_ops();
         let mut offset = 0;
 
         while offset < self.code.len() {

@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub source: String,
@@ -49,4 +49,55 @@ pub enum TokenKind {
     True,
     Var,
     While,
+
+    EOF,
+    UnknownChar,
+    UnterminatedString,
+}
+
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::LParen => write!(f, "'('"),
+            TokenKind::RParen => write!(f, "')'"),
+            TokenKind::LBrace => write!(f, "'{{'"),
+            TokenKind::RBrace => write!(f, "'}}'"),
+            TokenKind::Comma => write!(f, "','"),
+            TokenKind::Dot => write!(f, "'.'"),
+            TokenKind::Minus => write!(f, "'-'"),
+            TokenKind::Plus => write!(f, "'+'"),
+            TokenKind::Semicolon => write!(f, "';'"),
+            TokenKind::Slash => write!(f, "'/'"),
+            TokenKind::Star => write!(f, "'*'"),
+            TokenKind::Bang => write!(f, "'!'"),
+            TokenKind::BangEqual => write!(f, "'!='"),
+            TokenKind::Equal => write!(f, "'='"),
+            TokenKind::EqualEqual => write!(f, "'=='"),
+            TokenKind::Greater => write!(f, "'>'"),
+            TokenKind::GreaterEqual => write!(f, "'>='"),
+            TokenKind::Less => write!(f, "'<'"),
+            TokenKind::LessEqual => write!(f, "'<='"),
+            TokenKind::Identifier => write!(f, "identifier"),
+            TokenKind::String => write!(f, "string"),
+            TokenKind::Number => write!(f, "number"),
+            TokenKind::And => write!(f, "'and'"),
+            TokenKind::Class => write!(f, "'class'"),
+            TokenKind::Else => write!(f, "'else'"),
+            TokenKind::False => write!(f, "'false'"),
+            TokenKind::For => write!(f, "'for'"),
+            TokenKind::Fun => write!(f, "'fun'"),
+            TokenKind::If => write!(f, "'if'"),
+            TokenKind::Nil => write!(f, "'nil'"),
+            TokenKind::Or => write!(f, "'or'"),
+            TokenKind::Print => write!(f, "'print'"),
+            TokenKind::Return => write!(f, "'return'"),
+            TokenKind::Super => write!(f, "'super'"),
+            TokenKind::This => write!(f, "'this'"),
+            TokenKind::True => write!(f, "'true'"),
+            TokenKind::Var => write!(f, "'var'"),
+            TokenKind::While => write!(f, "'while'"),
+            TokenKind::EOF => write!(f, "eof"),
+            TokenKind::UnknownChar | TokenKind::UnterminatedString => unreachable!(),
+        }
+    }
 }

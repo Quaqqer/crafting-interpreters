@@ -7,12 +7,6 @@ pub struct Scanner {
     line: u32,
 }
 
-#[derive(Debug)]
-pub enum Error {
-    UnknownChar(char),
-    UnterminatedString,
-}
-
 impl Scanner {
     pub fn new(source: &str) -> Self {
         Scanner {
@@ -23,7 +17,7 @@ impl Scanner {
         }
     }
 
-    pub fn scan_token(&mut self) -> Result<Option<Token>, Error> {
+    pub fn scan_token(&mut self) -> Token {
         self.skip_whitespace();
 
         self.start = self.current;
@@ -31,7 +25,7 @@ impl Scanner {
         let c = self.advance();
 
         match c {
-            None => return Ok(None),
+            None => self.make_token(TokenKind::EOF),
             Some(c) => match c {
                 '(' => self.make_token(TokenKind::LParen),
                 ')' => self.make_token(TokenKind::RParen),
@@ -79,7 +73,7 @@ impl Scanner {
                 '"' => self.make_string(),
                 c if c.is_digit(10) => self.make_number(),
                 c if is_ident_head(c) => self.make_ident_or_kw(),
-                c => Err(Error::UnknownChar(c)),
+                _ => self.make_token(TokenKind::UnknownChar),
             },
         }
     }
@@ -104,21 +98,30 @@ impl Scanner {
 
     fn advance(&mut self) -> Option<char> {
         let c = self.peek();
-        self.current += 1;
+
+        if c.is_some() {
+            self.current += 1;
+        }
+
         c
     }
 
-    fn make_token(&self, kind: TokenKind) -> Result<Option<Token>, Error> {
-        Ok(Some(Token {
+    fn make_token(&self, kind: TokenKind) -> Token {
+        Token {
             kind,
             source: self.token_contents(),
             line: self.line,
-        }))
+        }
     }
 
-    fn make_string(&mut self) -> Result<Option<Token>, Error> {
+    fn make_string(&mut self) -> Token {
         loop {
-            let c = self.advance().ok_or(Error::UnterminatedString)?;
+            let c = match self.advance() {
+                Some(char) => char,
+                None => {
+                    return self.make_token(TokenKind::UnterminatedString);
+                }
+            };
 
             if c == '"' {
                 return self.make_token(TokenKind::String);
@@ -126,7 +129,7 @@ impl Scanner {
         }
     }
 
-    fn make_number(&mut self) -> Result<Option<Token>, Error> {
+    fn make_number(&mut self) -> Token {
         self.advance_while(|c| c.is_ascii_digit());
 
         if matches!(self.peek(), Some('.'))
@@ -139,7 +142,7 @@ impl Scanner {
         self.make_token(TokenKind::Number)
     }
 
-    fn make_ident_or_kw(&mut self) -> Result<Option<Token>, Error> {
+    fn make_ident_or_kw(&mut self) -> Token {
         self.advance_while(|c| is_ident_tail(c));
         let kind = match self.token_contents().as_str() {
             "and" => TokenKind::And,
@@ -223,9 +226,12 @@ mod tests {
         let mut tokens = Vec::new();
 
         loop {
-            match sc.scan_token().unwrap() {
-                Some(t) => tokens.push(t),
-                None => break,
+            match sc.scan_token() {
+                Token {
+                    kind: TokenKind::EOF,
+                    ..
+                } => break,
+                t => tokens.push(t),
             }
         }
 

@@ -107,11 +107,9 @@ impl VM {
     }
 
     pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
-        let res = Compiler::new()
-            .compile(source)
-            .map_err(|e| Error::CompileError(e));
-        println!("{:?}", res);
-        todo!()
+        let chunk = Compiler::compile(source).map_err(|e| Error::CompileError(e))?;
+        self.interpret(chunk)?;
+        Ok(())
     }
 
     fn push(&mut self, v: Value) {

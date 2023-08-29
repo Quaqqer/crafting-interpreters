@@ -26,11 +26,11 @@ fn interpret(vm: &mut VM, s: &str) {
         Ok(_) => todo!(),
         Err(e) => match e {
             crate::vm::Error::CompileError(msg) => {
-                eprintln!("{:?}", msg);
+                eprintln!("{}", msg);
                 exit(65);
             }
             crate::vm::Error::DecodeError(msg) => {
-                eprintln!("{:?}", msg);
+                eprintln!("{}", msg);
                 exit(70);
             }
         },
