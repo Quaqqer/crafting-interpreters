@@ -25,7 +25,7 @@ pub enum ErrorKind {
     Expected(&'static str),
 }
 
-#[derive(PartialEq, PartialOrd)]
+#[derive(PartialEq, PartialOrd, Debug)]
 enum Prec {
     None,
     Assignment,
@@ -97,31 +97,36 @@ impl Compiler {
         }
     }
 
-    fn peek(&mut self) -> Result<&Token, Error> {
+    fn peek(&mut self) -> Result<Token, Error> {
         if self.peek.is_none() {
             self.peek = Some(self.advance()?);
         }
-        Ok(self.peek.as_ref().unwrap())
+        Ok(self.peek.as_ref().unwrap().clone())
     }
 
     fn advance(&mut self) -> Result<Token, Error> {
-        self.peek = None;
+        if let Some(peeked) = self.peek.take() {
+            Ok(peeked)
+        } else {
+            let t = self.scanner.scan_token();
 
-        let t = self.scanner.scan_token();
-
-        match &t {
-            Token { kind, .. } => match kind {
-                TokenKind::UnknownChar | TokenKind::UnterminatedString => {
-                    return self.make_error(t, ErrorKind::ScanError)
-                }
-                _ => {}
-            },
+            match &t {
+                Token { kind, .. } => match kind {
+                    TokenKind::UnknownChar | TokenKind::UnterminatedString => {
+                        return self.make_error(&t, ErrorKind::ScanError)
+                    }
+                    _ => {}
+                },
+            }
+            Ok(t)
         }
-        Ok(t)
     }
 
-    fn make_error<T>(&self, at: Token, kind: ErrorKind) -> Result<T, Error> {
-        Err(Error { at, kind })
+    fn make_error<T>(&self, at: &Token, kind: ErrorKind) -> Result<T, Error> {
+        Err(Error {
+            at: at.clone(),
+            kind,
+        })
     }
 
     fn consume(&mut self, kind: TokenKind) -> Result<Token, Error> {
@@ -129,7 +134,7 @@ impl Compiler {
         if next.kind == kind {
             Ok(next)
         } else {
-            self.make_error(next, ErrorKind::ExpectedToken(kind))
+            self.make_error(&next, ErrorKind::ExpectedToken(kind))
         }
     }
 
@@ -147,6 +152,11 @@ impl Compiler {
         let t = self.consume(TokenKind::EOF)?;
         self.emit(&t, Op::Return);
 
+        #[cfg(feature = "debug_trace")]
+        {
+            println!("=== Code ===\n{}", self.chunk);
+        }
+
         Ok(())
     }
 
@@ -158,20 +168,33 @@ impl Compiler {
     }
 
     fn precedence(&mut self, prec: Prec) -> Result<(), Error> {
-        let t = self.advance()?;
-        match t.kind {
-            TokenKind::LParen => self.grouping(),
-            TokenKind::Number => self.number(t),
-            TokenKind::Minus => self.unary(t),
-            _ => self.make_error(t, ErrorKind::Expected("expression")),
+        let t = self.peek()?;
+        let rule = self.rule(&t.kind);
+        if let Some(prefix) = rule.prefix {
+            prefix(self)?;
+        } else {
+            self.make_error(&t, ErrorKind::Expected("expression"))?;
         }
+
+        loop {
+            let t = self.peek()?;
+            let rule = self.rule(&t.kind);
+
+            if prec < rule.prec {
+                rule.infix.unwrap()(self)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     fn binary(&mut self) -> Result<(), Error> {
         let t = self.advance()?;
         let operator = &t.kind;
-        let rule = self.rule(operator.clone());
-        self.precedence(rule.next())?;
+        let rule = self.rule(operator);
+        self.precedence(rule.prec.next())?;
 
         match operator {
             TokenKind::Plus => self.emit(&t, Op::Add),
@@ -189,21 +212,24 @@ impl Compiler {
     }
 
     fn grouping(&mut self) -> Result<(), Error> {
+        self.consume(TokenKind::LParen)?;
         self.expression()?;
         self.consume(TokenKind::RParen)?;
         Ok(())
     }
 
-    fn number(&mut self, t: Token) -> Result<(), Error> {
+    fn number(&mut self) -> Result<(), Error> {
+        let t = self.advance()?;
         let number: f64 = t.source.parse().unwrap();
         let constant = self.emit_constant(Value::Float(number));
         self.emit(&t, Op::Constant(constant));
         Ok(())
     }
 
-    fn unary(&mut self, t: Token) -> Result<(), Error> {
+    fn unary(&mut self) -> Result<(), Error> {
+        let t = self.advance()?;
         let operator = &t.kind;
-        self.expression()?;
+        self.precedence(Prec::Unary)?;
         match operator {
             TokenKind::Minus => {
                 self.emit(&t, Op::Negate);
@@ -213,7 +239,71 @@ impl Compiler {
         }
     }
 
-    fn rule(&self, operator: TokenKind) -> Prec {
-        todo!()
+    fn rule(&self, operator: &TokenKind) -> ParseRule {
+        match operator {
+            TokenKind::LParen => p_rule(Some(Box::new(|c| c.grouping())), None, Prec::None),
+            TokenKind::RParen => p_rule(None, None, Prec::None),
+            TokenKind::LBrace => p_rule(None, None, Prec::None),
+            TokenKind::RBrace => p_rule(None, None, Prec::None),
+            TokenKind::Comma => p_rule(None, None, Prec::None),
+            TokenKind::Dot => p_rule(None, None, Prec::None),
+            TokenKind::Minus => p_rule(
+                Some(Box::new(|c| c.unary())),
+                Some(Box::new(|c| c.binary())),
+                Prec::Term,
+            ),
+            TokenKind::Plus => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Term),
+            TokenKind::Semicolon => p_rule(None, Some(Box::new(|c| c.binary())), Prec::None),
+            TokenKind::Slash => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
+            TokenKind::Star => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
+            TokenKind::Bang => p_rule(None, None, Prec::None),
+            TokenKind::BangEqual => p_rule(None, None, Prec::None),
+            TokenKind::Equal => p_rule(None, None, Prec::None),
+            TokenKind::EqualEqual => p_rule(None, None, Prec::None),
+            TokenKind::Greater => p_rule(None, None, Prec::None),
+            TokenKind::GreaterEqual => p_rule(None, None, Prec::None),
+            TokenKind::Less => p_rule(None, None, Prec::None),
+            TokenKind::LessEqual => p_rule(None, None, Prec::None),
+            TokenKind::Identifier => p_rule(None, None, Prec::None),
+            TokenKind::String => p_rule(None, None, Prec::None),
+            TokenKind::Number => p_rule(Some(Box::new(|c| c.number())), None, Prec::None),
+            TokenKind::And => p_rule(None, None, Prec::None),
+            TokenKind::Class => p_rule(None, None, Prec::None),
+            TokenKind::Else => p_rule(None, None, Prec::None),
+            TokenKind::False => p_rule(None, None, Prec::None),
+            TokenKind::For => p_rule(None, None, Prec::None),
+            TokenKind::Fun => p_rule(None, None, Prec::None),
+            TokenKind::If => p_rule(None, None, Prec::None),
+            TokenKind::Nil => p_rule(None, None, Prec::None),
+            TokenKind::Or => p_rule(None, None, Prec::None),
+            TokenKind::Print => p_rule(None, None, Prec::None),
+            TokenKind::Return => p_rule(None, None, Prec::None),
+            TokenKind::Super => p_rule(None, None, Prec::None),
+            TokenKind::This => p_rule(None, None, Prec::None),
+            TokenKind::True => p_rule(None, None, Prec::None),
+            TokenKind::Var => p_rule(None, None, Prec::None),
+            TokenKind::While => p_rule(None, None, Prec::None),
+            TokenKind::EOF => p_rule(None, None, Prec::None),
+            TokenKind::UnknownChar => p_rule(None, None, Prec::None),
+            TokenKind::UnterminatedString => p_rule(None, None, Prec::None),
+        }
+    }
+}
+
+struct ParseRule {
+    prefix: Option<Box<dyn Fn(&mut Compiler) -> Result<(), Error>>>,
+    infix: Option<Box<dyn Fn(&mut Compiler) -> Result<(), Error>>>,
+    prec: Prec,
+}
+
+fn p_rule(
+    prefix: Option<Box<dyn Fn(&mut Compiler) -> Result<(), Error>>>,
+    infix: Option<Box<dyn Fn(&mut Compiler) -> Result<(), Error>>>,
+    prec: Prec,
+) -> ParseRule {
+    ParseRule {
+        prefix,
+        infix,
+        prec,
     }
 }

@@ -71,7 +71,7 @@ impl VM {
                 Op::Add => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (rhs, lhs) {
+                    let res = match (lhs, rhs) {
                         (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
                     };
                     self.push(res);
@@ -79,7 +79,7 @@ impl VM {
                 Op::Subtract => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (rhs, lhs) {
+                    let res = match (lhs, rhs) {
                         (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
                     };
                     self.push(res);
@@ -87,7 +87,7 @@ impl VM {
                 Op::Multiply => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (rhs, lhs) {
+                    let res = match (lhs, rhs) {
                         (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
                     };
                     self.push(res);
@@ -95,7 +95,7 @@ impl VM {
                 Op::Divide => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (rhs, lhs) {
+                    let res = match (lhs, rhs) {
                         (Value::Float(l), Value::Float(r)) => Value::Float(l / r),
                     };
                     self.push(res);

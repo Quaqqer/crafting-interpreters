@@ -50,6 +50,7 @@ pub fn repl() {
         std::io::stdin()
             .read_line(&mut line)
             .expect("Could not read line from stdin");
+        line = line.trim_end().to_string();
 
         // Exit when pressing <C-d>
         if line == "" {
