@@ -221,7 +221,7 @@ impl Compiler {
     fn number(&mut self) -> Result<(), Error> {
         let t = self.advance()?;
         let number: f64 = t.source.parse().unwrap();
-        let constant = self.emit_constant(Value::Float(number));
+        let constant = self.emit_constant(Value::Number(number));
         self.emit(&t, Op::Constant(constant));
         Ok(())
     }
@@ -235,7 +235,30 @@ impl Compiler {
                 self.emit(&t, Op::Negate);
                 Ok(())
             }
+            TokenKind::Bang => {
+                self.emit(&t, Op::Not);
+                Ok(())
+            }
             _ => unreachable!(),
+        }
+    }
+
+    fn literal(&mut self) -> Result<(), Error> {
+        let t = self.advance()?;
+        match &t.kind {
+            TokenKind::True => {
+                self.emit(&t, Op::True);
+                Ok(())
+            }
+            TokenKind::False => {
+                self.emit(&t, Op::False);
+                Ok(())
+            }
+            TokenKind::Nil => {
+                self.emit(&t, Op::Nil);
+                Ok(())
+            }
+            _ => self.make_error(&t, ErrorKind::Expected("literal")),
         }
     }
 
@@ -256,7 +279,7 @@ impl Compiler {
             TokenKind::Semicolon => p_rule(None, Some(Box::new(|c| c.binary())), Prec::None),
             TokenKind::Slash => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
             TokenKind::Star => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
-            TokenKind::Bang => p_rule(None, None, Prec::None),
+            TokenKind::Bang => p_rule(Some(Box::new(|c| c.unary())), None, Prec::None),
             TokenKind::BangEqual => p_rule(None, None, Prec::None),
             TokenKind::Equal => p_rule(None, None, Prec::None),
             TokenKind::EqualEqual => p_rule(None, None, Prec::None),
@@ -270,17 +293,17 @@ impl Compiler {
             TokenKind::And => p_rule(None, None, Prec::None),
             TokenKind::Class => p_rule(None, None, Prec::None),
             TokenKind::Else => p_rule(None, None, Prec::None),
-            TokenKind::False => p_rule(None, None, Prec::None),
+            TokenKind::False => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
             TokenKind::For => p_rule(None, None, Prec::None),
             TokenKind::Fun => p_rule(None, None, Prec::None),
             TokenKind::If => p_rule(None, None, Prec::None),
-            TokenKind::Nil => p_rule(None, None, Prec::None),
+            TokenKind::Nil => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
             TokenKind::Or => p_rule(None, None, Prec::None),
             TokenKind::Print => p_rule(None, None, Prec::None),
             TokenKind::Return => p_rule(None, None, Prec::None),
             TokenKind::Super => p_rule(None, None, Prec::None),
             TokenKind::This => p_rule(None, None, Prec::None),
-            TokenKind::True => p_rule(None, None, Prec::None),
+            TokenKind::True => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
             TokenKind::Var => p_rule(None, None, Prec::None),
             TokenKind::While => p_rule(None, None, Prec::None),
             TokenKind::EOF => p_rule(None, None, Prec::None),

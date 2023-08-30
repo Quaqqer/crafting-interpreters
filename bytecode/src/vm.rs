@@ -15,6 +15,42 @@ pub struct VM {
 pub enum Error {
     CompileError(compiler::Error),
     DecodeError(String),
+    BinaryError { lhs: Value, rhs: Value, op: Op },
+    UnaryError { v: Value, op: Op },
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::CompileError(e) => write!(f, "{}", e),
+            Error::DecodeError(s) => write!(f, "{}", s),
+            Error::BinaryError { lhs, rhs, op } => write!(
+                f,
+                "Cannot {} values of types {} and {}",
+                match op {
+                    Op::Add => "add",
+                    Op::Subtract => "subtract",
+                    Op::Multiply => "multiply",
+                    Op::Divide => "divide",
+                    _ => unreachable!(),
+                },
+                lhs.type_desc(),
+                rhs.type_desc()
+            ),
+            Error::UnaryError { v, op } => {
+                write!(
+                    f,
+                    "Cannot {} value of type {}",
+                    match op {
+                        Op::Negate => "negate",
+                        Op::Not => "invert",
+                        _ => unreachable!(),
+                    },
+                    v.type_desc()
+                )
+            }
+        }
+    }
 }
 
 impl VM {
@@ -65,14 +101,16 @@ impl VM {
                 Op::Negate => {
                     let v = self.pop();
                     match v {
-                        Value::Float(f) => self.push(Value::Float(-f)),
+                        Value::Number(f) => self.push(Value::Number(-f)),
+                        v => Err(Error::UnaryError { v, op })?,
                     }
                 }
                 Op::Add => {
                     let rhs = self.pop();
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
-                        (Value::Float(l), Value::Float(r)) => Value::Float(l + r),
+                        (Value::Number(l), Value::Number(r)) => Value::Number(l + r),
+                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -80,7 +118,8 @@ impl VM {
                     let rhs = self.pop();
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
-                        (Value::Float(l), Value::Float(r)) => Value::Float(l - r),
+                        (Value::Number(l), Value::Number(r)) => Value::Number(l - r),
+                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -88,7 +127,8 @@ impl VM {
                     let rhs = self.pop();
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
-                        (Value::Float(l), Value::Float(r)) => Value::Float(l * r),
+                        (Value::Number(l), Value::Number(r)) => Value::Number(l * r),
+                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -96,14 +136,33 @@ impl VM {
                     let rhs = self.pop();
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
-                        (Value::Float(l), Value::Float(r)) => Value::Float(l / r),
+                        (Value::Number(l), Value::Number(r)) => Value::Number(l / r),
+                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
                     };
                     self.push(res);
+                }
+                Op::True => self.push(Value::Bool(true)),
+                Op::False => self.push(Value::Bool(false)),
+                Op::Nil => self.push(Value::Nil),
+                Op::Not => {
+                    let v = self.pop();
+                    match VM::is_falsey(&v) {
+                        Some(v) => self.push(Value::Bool(v)),
+                        None => Err(Error::UnaryError { v, op })?,
+                    }
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn is_falsey(v: &Value) -> Option<bool> {
+        match v {
+            Value::Nil => Some(true),
+            Value::Bool(b) => Some(!b),
+            _ => None,
+        }
     }
 
     pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
@@ -148,48 +207,48 @@ mod tests {
     #[should_panic]
     fn wrong_res() {
         test_vm(
-            vec![Value::Float(1.)],
+            vec![Value::Number(1.)],
             vec![Op::Constant(0)],
-            vec![Value::Float(0.)],
+            vec![Value::Number(0.)],
         )
     }
 
     #[test]
     fn basic_ops() {
         test_vm(
-            vec![Value::Float(0.)],
+            vec![Value::Number(0.)],
             vec![Op::Constant(0)],
-            vec![Value::Float(0.)],
+            vec![Value::Number(0.)],
         );
 
         test_vm(
-            vec![Value::Float(1.)],
+            vec![Value::Number(1.)],
             vec![Op::Constant(0), Op::Negate],
-            vec![Value::Float(-1.)],
+            vec![Value::Number(-1.)],
         );
 
         test_vm(
-            vec![Value::Float(1.)],
+            vec![Value::Number(1.)],
             vec![Op::Constant(0), Op::Constant(0), Op::Add],
-            vec![Value::Float(2.)],
+            vec![Value::Number(2.)],
         );
 
         test_vm(
-            vec![Value::Float(1.)],
+            vec![Value::Number(1.)],
             vec![Op::Constant(0), Op::Constant(0), Op::Subtract],
-            vec![Value::Float(0.)],
+            vec![Value::Number(0.)],
         );
 
         test_vm(
-            vec![Value::Float(2.)],
+            vec![Value::Number(2.)],
             vec![Op::Constant(0), Op::Constant(0), Op::Multiply],
-            vec![Value::Float(4.)],
+            vec![Value::Number(4.)],
         );
 
         test_vm(
-            vec![Value::Float(2.)],
+            vec![Value::Number(2.)],
             vec![Op::Constant(0), Op::Constant(0), Op::Divide],
-            vec![Value::Float(1.)],
+            vec![Value::Number(1.)],
         );
     }
 }

@@ -6,6 +6,10 @@ pub enum Opcode {
     Subtract,
     Multiply,
     Divide,
+    True,
+    False,
+    Nil,
+    Not,
 }
 
 impl From<Opcode> for u8 {
@@ -18,6 +22,10 @@ impl From<Opcode> for u8 {
             Opcode::Subtract => 4,
             Opcode::Multiply => 5,
             Opcode::Divide => 6,
+            Opcode::True => 7,
+            Opcode::False => 8,
+            Opcode::Nil => 9,
+            Opcode::Not => 10,
         }
     }
 }
@@ -32,6 +40,10 @@ impl From<u8> for Opcode {
             4 => Opcode::Subtract,
             5 => Opcode::Multiply,
             6 => Opcode::Divide,
+            7 => Opcode::True,
+            8 => Opcode::False,
+            9 => Opcode::Nil,
+            10 => Opcode::Not,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -46,6 +58,10 @@ pub enum Op {
     Subtract,
     Multiply,
     Divide,
+    True,
+    False,
+    Nil,
+    Not,
 }
 
 impl std::fmt::Display for Op {
@@ -58,6 +74,10 @@ impl std::fmt::Display for Op {
             Op::Subtract => write!(f, "SUBTRACT"),
             Op::Multiply => write!(f, "MULTIPLY"),
             Op::Divide => write!(f, "DIVIDE"),
+            Op::True => write!(f, "TRUE"),
+            Op::False => write!(f, "FALSE"),
+            Op::Nil => write!(f, "NIL"),
+            Op::Not => write!(f, "NOT"),
         }
     }
 }

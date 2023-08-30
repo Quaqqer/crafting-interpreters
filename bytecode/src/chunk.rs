@@ -33,6 +33,10 @@ impl Chunk {
             Opcode::Subtract => Ok((Op::Subtract, 1)),
             Opcode::Multiply => Ok((Op::Multiply, 1)),
             Opcode::Divide => Ok((Op::Divide, 1)),
+            Opcode::True => Ok((Op::True, 1)),
+            Opcode::False => Ok((Op::False, 1)),
+            Opcode::Nil => Ok((Op::Nil, 1)),
+            Opcode::Not => Ok((Op::Not, 1)),
         }
     }
 
@@ -50,22 +54,30 @@ impl Chunk {
 
     pub fn add_op(&mut self, op: Op, line: u32) {
         match op {
-            Op::Return => self.add_code(u8::from(Opcode::Return), line),
+            Op::Return => self.add_basic(Opcode::Return, line),
             Op::Constant(offset) => {
                 self.add_code(u8::from(Opcode::Constant), line);
                 self.add_code(offset, line);
             }
-            Op::Negate => self.add_code(u8::from(Opcode::Negate), line),
-            Op::Add => self.add_code(u8::from(Opcode::Add), line),
-            Op::Subtract => self.add_code(u8::from(Opcode::Subtract), line),
-            Op::Multiply => self.add_code(u8::from(Opcode::Multiply), line),
-            Op::Divide => self.add_code(u8::from(Opcode::Divide), line),
+            Op::Negate => self.add_basic(Opcode::Negate, line),
+            Op::Add => self.add_basic(Opcode::Add, line),
+            Op::Subtract => self.add_basic(Opcode::Subtract, line),
+            Op::Multiply => self.add_basic(Opcode::Multiply, line),
+            Op::Divide => self.add_basic(Opcode::Divide, line),
+            Op::True => self.add_basic(Opcode::True, line),
+            Op::False => self.add_basic(Opcode::False, line),
+            Op::Nil => self.add_basic(Opcode::Nil, line),
+            Op::Not => self.add_basic(Opcode::Not, line),
         }
     }
 
     pub fn add_code(&mut self, v: u8, line: u32) {
         self.code.push(v);
         self.lines.push(line);
+    }
+
+    fn add_basic(&mut self, opcode: Opcode, line: u32) {
+        self.add_code(u8::from(opcode), line);
     }
 
     pub fn add_constant(&mut self, v: Value) -> u8 {
@@ -129,8 +141,8 @@ mod tests {
     fn encode_decode() {
         let mut c = Chunk::new();
 
-        c.add_constant(Value::Float(0.));
-        assert_eq!(c.constants, vec![Value::Float(0.)]);
+        c.add_constant(Value::Number(0.));
+        assert_eq!(c.constants, vec![Value::Number(0.)]);
 
         c.add_op(Op::Return, 0);
         c.add_op(Op::Constant(0), 0);
@@ -158,7 +170,7 @@ mod tests {
     #[test]
     fn print() {
         let mut c = Chunk::new();
-        c.add_constant(Value::Float(0.));
+        c.add_constant(Value::Number(0.));
         c.add_op(Op::Return, 0);
         c.add_op(Op::Constant(0), 0);
         c.add_op(Op::Negate, 0);

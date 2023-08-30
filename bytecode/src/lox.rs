@@ -2,7 +2,7 @@ use std::{io::Write, process};
 
 use clap::Parser;
 
-use crate::vm::VM;
+use crate::vm::{self, VM};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -23,18 +23,11 @@ pub fn cli() {
 fn interpret(vm: &mut VM, s: &str, exit: bool) {
     let res = vm.interpret_str(s);
     if let Err(e) = res {
-        match e {
-            crate::vm::Error::CompileError(msg) => {
-                eprintln!("{}", msg);
-                if exit {
-                    process::exit(65);
-                }
-            }
-            crate::vm::Error::DecodeError(msg) => {
-                eprintln!("{}", msg);
-                if exit {
-                    process::exit(70);
-                }
+        eprintln!("{}", e);
+        if exit {
+            match e {
+                vm::Error::CompileError(_) => process::exit(65),
+                _ => process::exit(70),
             }
         }
     };
