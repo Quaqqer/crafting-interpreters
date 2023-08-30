@@ -1,9 +1,11 @@
+use std::rc::Rc;
+
 use crate::{
     chunk::Chunk,
     op::Op,
     scanner::Scanner,
     token::{Token, TokenKind},
-    value::Value,
+    value::{HeapValue, Value},
 };
 
 pub struct Compiler {
@@ -270,6 +272,13 @@ impl Compiler {
                 self.emit(&t, Op::Nil);
                 Ok(())
             }
+            TokenKind::String => {
+                let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
+                    t.source[1..t.source.len() - 1].to_string(),
+                ))));
+                self.emit(&t, Op::Constant(c));
+                Ok(())
+            }
             _ => self.make_error(&t, ErrorKind::Expected("literal")),
         }
     }
@@ -302,7 +311,7 @@ impl Compiler {
             TokenKind::Less => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
             TokenKind::LessEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
             TokenKind::Identifier => p_rule(None, None, Prec::None),
-            TokenKind::String => p_rule(None, None, Prec::None),
+            TokenKind::String => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
             TokenKind::Number => p_rule(Some(Box::new(|c| c.number())), None, Prec::None),
             TokenKind::And => p_rule(None, None, Prec::None),
             TokenKind::Class => p_rule(None, None, Prec::None),

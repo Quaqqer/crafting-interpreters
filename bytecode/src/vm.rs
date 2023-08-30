@@ -1,8 +1,10 @@
+use std::rc::Rc;
+
 use crate::{
     chunk::Chunk,
     compiler::{self, Compiler},
     op::Op,
-    value::Value,
+    value::{HeapValue, Value},
 };
 
 pub struct VM {
@@ -125,8 +127,15 @@ impl VM {
                 Op::Add => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (lhs, rhs) {
+                    let res = match (&lhs, &rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l + r),
+                        (Value::HeapValue(lhs), Value::HeapValue(rhs)) => {
+                            match (&*lhs.as_ref(), &*rhs.as_ref()) {
+                                (HeapValue::String(l), HeapValue::String(r)) => {
+                                    Value::HeapValue(Rc::new(HeapValue::String(l.to_owned() + r)))
+                                }
+                            }
+                        }
                         _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
                     self.push(res);
@@ -134,7 +143,7 @@ impl VM {
                 Op::Subtract => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (lhs, rhs) {
+                    let res = match (&lhs, &rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l - r),
                         _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
@@ -143,7 +152,7 @@ impl VM {
                 Op::Multiply => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (lhs, rhs) {
+                    let res = match (&lhs, &rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l * r),
                         _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
@@ -152,7 +161,7 @@ impl VM {
                 Op::Divide => {
                     let rhs = self.pop();
                     let lhs = self.pop();
-                    let res = match (lhs, rhs) {
+                    let res = match (&lhs, &rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l / r),
                         _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
@@ -175,6 +184,9 @@ impl VM {
                         (Value::Number(l), Value::Number(r)) => l == r,
                         (Value::Bool(l), Value::Bool(r)) => l == r,
                         (Value::Nil, Value::Nil) => true,
+                        (Value::HeapValue(lhs), Value::HeapValue(rhs)) => match (&*lhs, &*rhs) {
+                            (HeapValue::String(l), HeapValue::String(r)) => l == r,
+                        },
                         _ => false,
                     };
                     self.push(Value::Bool(res));
