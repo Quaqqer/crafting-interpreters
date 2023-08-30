@@ -188,7 +188,7 @@ impl Compiler {
             let t = self.peek()?;
             let rule = self.rule(&t.kind);
 
-            if prec < rule.prec {
+            if prec <= rule.prec {
                 rule.infix.unwrap()(self)?;
             } else {
                 break;
