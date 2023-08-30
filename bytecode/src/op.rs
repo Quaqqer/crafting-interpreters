@@ -10,6 +10,9 @@ pub enum Opcode {
     False,
     Nil,
     Not,
+    Equal,
+    Greater,
+    Less,
 }
 
 impl From<Opcode> for u8 {
@@ -26,6 +29,9 @@ impl From<Opcode> for u8 {
             Opcode::False => 8,
             Opcode::Nil => 9,
             Opcode::Not => 10,
+            Opcode::Equal => 11,
+            Opcode::Greater => 12,
+            Opcode::Less => 13,
         }
     }
 }
@@ -44,12 +50,15 @@ impl From<u8> for Opcode {
             8 => Opcode::False,
             9 => Opcode::Nil,
             10 => Opcode::Not,
+            11 => Opcode::Equal,
+            12 => Opcode::Greater,
+            13 => Opcode::Less,
             _ => panic!("No such opcode {}", value),
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Op {
     Return,
     Constant(u8),
@@ -62,6 +71,9 @@ pub enum Op {
     False,
     Nil,
     Not,
+    Equal,
+    Greater,
+    Less,
 }
 
 impl std::fmt::Display for Op {
@@ -78,6 +90,9 @@ impl std::fmt::Display for Op {
             Op::False => write!(f, "FALSE"),
             Op::Nil => write!(f, "NIL"),
             Op::Not => write!(f, "NOT"),
+            Op::Equal => write!(f, "EQUAL"),
+            Op::Greater => write!(f, "GREATER"),
+            Op::Less => write!(f, "LESS"),
         }
     }
 }

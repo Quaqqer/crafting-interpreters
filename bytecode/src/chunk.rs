@@ -37,6 +37,9 @@ impl Chunk {
             Opcode::False => Ok((Op::False, 1)),
             Opcode::Nil => Ok((Op::Nil, 1)),
             Opcode::Not => Ok((Op::Not, 1)),
+            Opcode::Equal => Ok((Op::Equal, 1)),
+            Opcode::Greater => Ok((Op::Greater, 1)),
+            Opcode::Less => Ok((Op::Less, 1)),
         }
     }
 
@@ -68,6 +71,9 @@ impl Chunk {
             Op::False => self.add_basic(Opcode::False, line),
             Op::Nil => self.add_basic(Opcode::Nil, line),
             Op::Not => self.add_basic(Opcode::Not, line),
+            Op::Equal => self.add_basic(Opcode::Equal, line),
+            Op::Greater => self.add_basic(Opcode::Greater, line),
+            Op::Less => self.add_basic(Opcode::Less, line),
         }
     }
 

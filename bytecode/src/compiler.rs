@@ -142,6 +142,12 @@ impl Compiler {
         self.chunk.add_op(op, token.line);
     }
 
+    fn emits(&mut self, token: &Token, ops: &[Op]) {
+        for op in ops {
+            self.chunk.add_op(op.clone(), token.line);
+        }
+    }
+
     fn emit_constant(&mut self, v: Value) -> u8 {
         self.chunk.add_constant(v)
     }
@@ -201,6 +207,12 @@ impl Compiler {
             TokenKind::Minus => self.emit(&t, Op::Subtract),
             TokenKind::Star => self.emit(&t, Op::Multiply),
             TokenKind::Slash => self.emit(&t, Op::Divide),
+            TokenKind::BangEqual => self.emits(&t, &[Op::Equal, Op::Not]),
+            TokenKind::EqualEqual => self.emit(&t, Op::Equal),
+            TokenKind::Greater => self.emit(&t, Op::Greater),
+            TokenKind::GreaterEqual => self.emits(&t, &[Op::Less, Op::Not]),
+            TokenKind::Less => self.emit(&t, Op::Less),
+            TokenKind::LessEqual => self.emits(&t, &[Op::Greater, Op::Not]),
             _ => unreachable!(),
         };
 
@@ -280,13 +292,15 @@ impl Compiler {
             TokenKind::Slash => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
             TokenKind::Star => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
             TokenKind::Bang => p_rule(Some(Box::new(|c| c.unary())), None, Prec::None),
-            TokenKind::BangEqual => p_rule(None, None, Prec::None),
+            TokenKind::BangEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Equality),
             TokenKind::Equal => p_rule(None, None, Prec::None),
-            TokenKind::EqualEqual => p_rule(None, None, Prec::None),
-            TokenKind::Greater => p_rule(None, None, Prec::None),
-            TokenKind::GreaterEqual => p_rule(None, None, Prec::None),
-            TokenKind::Less => p_rule(None, None, Prec::None),
-            TokenKind::LessEqual => p_rule(None, None, Prec::None),
+            TokenKind::EqualEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Equality),
+            TokenKind::Greater => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
+            TokenKind::GreaterEqual => {
+                p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison)
+            }
+            TokenKind::Less => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
+            TokenKind::LessEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
             TokenKind::Identifier => p_rule(None, None, Prec::None),
             TokenKind::String => p_rule(None, None, Prec::None),
             TokenKind::Number => p_rule(Some(Box::new(|c| c.number())), None, Prec::None),

@@ -151,6 +151,35 @@ impl VM {
                         None => Err(Error::UnaryError { v, op })?,
                     }
                 }
+                Op::Equal => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (lhs, rhs) {
+                        (Value::Number(l), Value::Number(r)) => l == r,
+                        (Value::Bool(l), Value::Bool(r)) => l == r,
+                        (Value::Nil, Value::Nil) => true,
+                        _ => false,
+                    };
+                    self.push(Value::Bool(res));
+                }
+                Op::Greater => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (lhs, rhs) {
+                        (Value::Number(l), Value::Number(r)) => l > r,
+                        _ => false,
+                    };
+                    self.push(Value::Bool(res));
+                }
+                Op::Less => {
+                    let rhs = self.pop();
+                    let lhs = self.pop();
+                    let res = match (lhs, rhs) {
+                        (Value::Number(l), Value::Number(r)) => l < r,
+                        _ => false,
+                    };
+                    self.push(Value::Bool(res));
+                }
             }
         }
 
