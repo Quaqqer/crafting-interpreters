@@ -155,10 +155,11 @@ impl Compiler {
     }
 
     fn run(&mut self) -> Result<(), Error> {
-        self.expression()?;
+        while self.peek()?.kind != TokenKind::EOF {
+            self.declaration()?;
+        }
 
-        let t = self.consume(TokenKind::EOF)?;
-        self.emit(&t, Op::Return);
+        self.consume(TokenKind::EOF)?;
 
         #[cfg(feature = "debug_trace")]
         {
@@ -333,6 +334,60 @@ impl Compiler {
             TokenKind::UnknownChar => p_rule(None, None, Prec::None),
             TokenKind::UnterminatedString => p_rule(None, None, Prec::None),
         }
+    }
+
+    fn declaration(&mut self) -> Result<(), Error> {
+        if self.peek()?.kind == TokenKind::Var {
+            self.var_declaration()
+        } else {
+            self.statement()
+        }
+    }
+
+    fn var_declaration(&mut self) -> Result<(), Error> {
+        self.consume(TokenKind::Var)?;
+        let t = self.var()?;
+
+        if self.peek()?.kind == TokenKind::Equal {
+            self.advance()?;
+            self.expression()?;
+        } else {
+            self.emit(&t, Op::Nil);
+        }
+        self.consume(TokenKind::Semicolon)?;
+        Ok(())
+    }
+
+    fn statement(&mut self) -> Result<(), Error> {
+        let t = self.peek()?;
+        match t.kind {
+            TokenKind::Print => self.print(),
+            _ => self.expression_statement(),
+        }
+    }
+
+    fn print(&mut self) -> Result<(), Error> {
+        let t = self.consume(TokenKind::Print)?;
+        self.expression()?;
+        self.emit(&t, Op::Print);
+        self.consume(TokenKind::Semicolon)?;
+        Ok(())
+    }
+
+    fn expression_statement(&mut self) -> Result<(), Error> {
+        self.expression()?;
+        let t = self.consume(TokenKind::Semicolon)?;
+        self.emit(&t, Op::Pop);
+        Ok(())
+    }
+
+    fn var(&mut self) -> Result<Token, Error> {
+        let t = self.consume(TokenKind::Identifier)?;
+        let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
+            t.source.clone(),
+        ))));
+        self.emit(&t, Op::DefineGlobal(c));
+        Ok(t)
     }
 }
 

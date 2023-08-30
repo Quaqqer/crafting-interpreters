@@ -13,6 +13,9 @@ pub enum Opcode {
     Equal,
     Greater,
     Less,
+    Print,
+    Pop,
+    DefineGlobal,
 }
 
 impl From<Opcode> for u8 {
@@ -32,6 +35,9 @@ impl From<Opcode> for u8 {
             Opcode::Equal => 11,
             Opcode::Greater => 12,
             Opcode::Less => 13,
+            Opcode::Print => 14,
+            Opcode::Pop => 15,
+            Opcode::DefineGlobal => 16,
         }
     }
 }
@@ -53,6 +59,9 @@ impl From<u8> for Opcode {
             11 => Opcode::Equal,
             12 => Opcode::Greater,
             13 => Opcode::Less,
+            14 => Opcode::Print,
+            15 => Opcode::Pop,
+            16 => Opcode::DefineGlobal,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -74,6 +83,9 @@ pub enum Op {
     Equal,
     Greater,
     Less,
+    Print,
+    Pop,
+    DefineGlobal(u8),
 }
 
 impl std::fmt::Display for Op {
@@ -93,6 +105,9 @@ impl std::fmt::Display for Op {
             Op::Equal => write!(f, "EQUAL"),
             Op::Greater => write!(f, "GREATER"),
             Op::Less => write!(f, "LESS"),
+            Op::Print => write!(f, "PRINT"),
+            Op::Pop => write!(f, "POP"),
+            Op::DefineGlobal(g) => write!(f, "DEFINE_GLOBAL {}", g),
         }
     }
 }

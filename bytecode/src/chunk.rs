@@ -40,6 +40,12 @@ impl Chunk {
             Opcode::Equal => Ok((Op::Equal, 1)),
             Opcode::Greater => Ok((Op::Greater, 1)),
             Opcode::Less => Ok((Op::Less, 1)),
+            Opcode::Print => Ok((Op::Print, 1)),
+            Opcode::Pop => Ok((Op::Pop, 1)),
+            Opcode::DefineGlobal => {
+                let g = self.code[offset + 1];
+                Ok((Op::DefineGlobal(g), 2))
+            }
         }
     }
 
@@ -59,7 +65,7 @@ impl Chunk {
         match op {
             Op::Return => self.add_basic(Opcode::Return, line),
             Op::Constant(offset) => {
-                self.add_code(u8::from(Opcode::Constant), line);
+                self.add_basic(Opcode::Constant, line);
                 self.add_code(offset, line);
             }
             Op::Negate => self.add_basic(Opcode::Negate, line),
@@ -74,6 +80,12 @@ impl Chunk {
             Op::Equal => self.add_basic(Opcode::Equal, line),
             Op::Greater => self.add_basic(Opcode::Greater, line),
             Op::Less => self.add_basic(Opcode::Less, line),
+            Op::Print => self.add_basic(Opcode::Print, line),
+            Op::Pop => self.add_basic(Opcode::Pop, line),
+            Op::DefineGlobal(g) => {
+                self.add_basic(Opcode::DefineGlobal, line);
+                self.add_code(g, line);
+            }
         }
     }
 

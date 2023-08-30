@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     chunk::Chunk,
@@ -11,6 +11,7 @@ pub struct VM {
     chunk: Chunk,
     ii: usize,
     stack: Vec<Value>,
+    globals: HashMap<String, Value>,
 }
 
 #[derive(Debug)]
@@ -74,6 +75,7 @@ impl VM {
             chunk: Chunk::new(),
             ii: 0,
             stack: Vec::new(),
+            globals: HashMap::new(),
         }
     }
 
@@ -209,6 +211,22 @@ impl VM {
                     };
                     self.push(Value::Bool(res));
                 }
+                Op::Print => {
+                    println!("{}", self.pop());
+                }
+                Op::Pop => {
+                    self.pop();
+                }
+                Op::DefineGlobal(offset) => {
+                    let v = self.chunk.read_constant(offset).unwrap().clone();
+                    let s = match &v {
+                        Value::HeapValue(h) => match &*h.as_ref() {
+                            HeapValue::String(s) => s,
+                        },
+                        _ => unreachable!(),
+                    };
+                    self.globals.insert(s.to_string(), Value::Nil);
+                }
             }
         }
 
@@ -223,7 +241,7 @@ impl VM {
         }
     }
 
-    pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
+    pub fn interpret_str(&mut self, source: &str, repl: bool) -> Result<(), Error> {
         let chunk = Compiler::compile(source).map_err(|e| Error::Compiler(e))?;
         self.interpret(chunk)?;
         Ok(())

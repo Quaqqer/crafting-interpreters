@@ -20,11 +20,11 @@ pub fn cli() {
     }
 }
 
-fn interpret(vm: &mut VM, s: &str, exit: bool) {
-    let res = vm.interpret_str(s);
+fn interpret(vm: &mut VM, s: &str, repl: bool) {
+    let res = vm.interpret_str(s, repl);
     if let Err(e) = res {
         eprintln!("{}", e);
-        if exit {
+        if !repl {
             match e {
                 vm::Error::Compiler(_) => process::exit(65),
                 _ => process::exit(70),
@@ -51,12 +51,12 @@ pub fn repl() {
             return;
         }
 
-        interpret(&mut vm, line.as_str(), false);
+        interpret(&mut vm, line.as_str(), true);
     }
 }
 
 pub fn run_file(path: &str) {
     let mut vm = VM::new();
     let source = std::fs::read_to_string(path).unwrap();
-    interpret(&mut vm, &source, true);
+    interpret(&mut vm, &source, false);
 }
