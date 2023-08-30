@@ -25,6 +25,7 @@ pub enum RuntimeError {
     Decode(usize),
     Binary { lhs: Value, rhs: Value, op: Op },
     Unary { v: Value, op: Op },
+    Undefined { i: String },
 }
 
 impl std::fmt::Display for Error {
@@ -53,18 +54,18 @@ impl std::fmt::Display for RuntimeError {
                 lhs.type_desc(),
                 rhs.type_desc()
             ),
-            RuntimeError::Unary { v, op } => {
-                write!(
-                    f,
-                    "Cannot {} value of type {}",
-                    match op {
-                        Op::Negate => "negate",
-                        Op::Not => "invert",
-                        _ => unreachable!(),
-                    },
-                    v.type_desc()
-                )
-            }
+            RuntimeError::Unary { v, op } => write!(
+                f,
+                "Cannot {} value of type {}",
+                match op {
+                    Op::Negate => "negate",
+                    Op::Not => "invert",
+                    _ => unreachable!(),
+                },
+                v.type_desc()
+            ),
+
+            RuntimeError::Undefined { i } => write!(f, "No such variable '{}'", i),
         }
     }
 }
@@ -225,7 +226,22 @@ impl VM {
                         },
                         _ => unreachable!(),
                     };
-                    self.globals.insert(s.to_string(), Value::Nil);
+                    let v = self.pop();
+                    self.globals.insert(s.to_string(), v);
+                }
+                Op::GetGlobal(offset) => {
+                    let v = self.chunk.read_constant(offset).unwrap().clone();
+                    let s = match &v {
+                        Value::HeapValue(h) => match &*h.as_ref() {
+                            HeapValue::String(s) => s,
+                        },
+                        _ => unreachable!(),
+                    };
+                    if let Some(v) = self.globals.get(s) {
+                        self.push(v.clone());
+                    } else {
+                        self.make_runtime_error(RuntimeError::Undefined { i: s.to_string() })?;
+                    }
                 }
             }
         }

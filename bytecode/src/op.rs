@@ -16,6 +16,7 @@ pub enum Opcode {
     Print,
     Pop,
     DefineGlobal,
+    GetGlobal,
 }
 
 impl From<Opcode> for u8 {
@@ -38,6 +39,7 @@ impl From<Opcode> for u8 {
             Opcode::Print => 14,
             Opcode::Pop => 15,
             Opcode::DefineGlobal => 16,
+            Opcode::GetGlobal => 17,
         }
     }
 }
@@ -62,6 +64,7 @@ impl From<u8> for Opcode {
             14 => Opcode::Print,
             15 => Opcode::Pop,
             16 => Opcode::DefineGlobal,
+            17 => Opcode::GetGlobal,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -86,6 +89,7 @@ pub enum Op {
     Print,
     Pop,
     DefineGlobal(u8),
+    GetGlobal(u8),
 }
 
 impl std::fmt::Display for Op {
@@ -108,6 +112,7 @@ impl std::fmt::Display for Op {
             Op::Print => write!(f, "PRINT"),
             Op::Pop => write!(f, "POP"),
             Op::DefineGlobal(g) => write!(f, "DEFINE_GLOBAL {}", g),
+            Op::GetGlobal(g) => write!(f, "GET_GLOBAL {}", g),
         }
     }
 }

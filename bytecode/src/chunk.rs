@@ -46,6 +46,10 @@ impl Chunk {
                 let g = self.code[offset + 1];
                 Ok((Op::DefineGlobal(g), 2))
             }
+            Opcode::GetGlobal => {
+                let g = self.code[offset + 1];
+                Ok((Op::GetGlobal(g), 2))
+            }
         }
     }
 
@@ -84,6 +88,10 @@ impl Chunk {
             Op::Pop => self.add_basic(Opcode::Pop, line),
             Op::DefineGlobal(g) => {
                 self.add_basic(Opcode::DefineGlobal, line);
+                self.add_code(g, line);
+            }
+            Op::GetGlobal(g) => {
+                self.add_basic(Opcode::GetGlobal, line);
                 self.add_code(g, line);
             }
         }
@@ -138,6 +146,10 @@ impl std::fmt::Display for Chunk {
                     "CONSTANT {} ({})",
                     offset, self.constants[offset as usize]
                 )?,
+                Op::DefineGlobal(g) => {
+                    write!(f, "DEFINE_GLOBAL {} ({})", g, self.constants[g as usize])?
+                }
+                Op::GetGlobal(g) => write!(f, "GET_GLOBAL {} ({})", g, self.constants[g as usize])?,
                 _ => write!(f, "{}", op)?,
             };
 

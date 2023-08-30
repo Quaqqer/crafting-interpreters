@@ -311,7 +311,7 @@ impl Compiler {
             }
             TokenKind::Less => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
             TokenKind::LessEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
-            TokenKind::Identifier => p_rule(None, None, Prec::None),
+            TokenKind::Identifier => p_rule(Some(Box::new(|c| c.var())), None, Prec::None),
             TokenKind::String => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
             TokenKind::Number => p_rule(Some(Box::new(|c| c.number())), None, Prec::None),
             TokenKind::And => p_rule(None, None, Prec::None),
@@ -346,7 +346,7 @@ impl Compiler {
 
     fn var_declaration(&mut self) -> Result<(), Error> {
         self.consume(TokenKind::Var)?;
-        let t = self.var()?;
+        let t = self.consume(TokenKind::Identifier)?;
 
         if self.peek()?.kind == TokenKind::Equal {
             self.advance()?;
@@ -354,6 +354,10 @@ impl Compiler {
         } else {
             self.emit(&t, Op::Nil);
         }
+
+        let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(t.source.clone()))));
+        self.emit(&t, Op::DefineGlobal(c));
+
         self.consume(TokenKind::Semicolon)?;
         Ok(())
     }
@@ -381,13 +385,13 @@ impl Compiler {
         Ok(())
     }
 
-    fn var(&mut self) -> Result<Token, Error> {
+    fn var(&mut self) -> Result<(), Error> {
         let t = self.consume(TokenKind::Identifier)?;
         let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
             t.source.clone(),
         ))));
-        self.emit(&t, Op::DefineGlobal(c));
-        Ok(t)
+        self.emit(&t, Op::GetGlobal(c));
+        Ok(())
     }
 }
 
