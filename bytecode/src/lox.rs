@@ -26,7 +26,7 @@ fn interpret(vm: &mut VM, s: &str, exit: bool) {
         eprintln!("{}", e);
         if exit {
             match e {
-                vm::Error::CompileError(_) => process::exit(65),
+                vm::Error::Compiler(_) => process::exit(65),
                 _ => process::exit(70),
             }
         }

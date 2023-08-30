@@ -13,18 +13,31 @@ pub struct VM {
 
 #[derive(Debug)]
 pub enum Error {
-    CompileError(compiler::Error),
-    DecodeError(String),
-    BinaryError { lhs: Value, rhs: Value, op: Op },
-    UnaryError { v: Value, op: Op },
+    Compiler(compiler::Error),
+    Runtime { line: u32, kind: RuntimeError },
+}
+
+#[derive(Debug)]
+pub enum RuntimeError {
+    Decode(usize),
+    Binary { lhs: Value, rhs: Value, op: Op },
+    Unary { v: Value, op: Op },
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::CompileError(e) => write!(f, "{}", e),
-            Error::DecodeError(s) => write!(f, "{}", s),
-            Error::BinaryError { lhs, rhs, op } => write!(
+            Error::Compiler(e) => write!(f, "{}", e),
+            Error::Runtime { line, kind } => write!(f, "[line {}] {}", line, kind),
+        }
+    }
+}
+
+impl std::fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RuntimeError::Decode(s) => write!(f, "{}", s),
+            RuntimeError::Binary { lhs, rhs, op } => write!(
                 f,
                 "Cannot {} values of types {} and {}",
                 match op {
@@ -37,7 +50,7 @@ impl std::fmt::Display for Error {
                 lhs.type_desc(),
                 rhs.type_desc()
             ),
-            Error::UnaryError { v, op } => {
+            RuntimeError::Unary { v, op } => {
                 write!(
                     f,
                     "Cannot {} value of type {}",
@@ -72,11 +85,15 @@ impl VM {
                 self.ii += d;
                 Ok(Some(op))
             }
-            Err(_) => Err(Error::DecodeError(format!(
-                "Could not decode op at index {}",
-                self.ii,
-            ))),
+            Err(_) => self.make_runtime_error(RuntimeError::Decode(self.ii)),
         }
+    }
+
+    fn make_runtime_error<T>(&self, kind: RuntimeError) -> Result<T, Error> {
+        Err(Error::Runtime {
+            line: self.chunk.get_line(self.ii),
+            kind,
+        })
     }
 
     pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Error> {
@@ -102,7 +119,7 @@ impl VM {
                     let v = self.pop();
                     match v {
                         Value::Number(f) => self.push(Value::Number(-f)),
-                        v => Err(Error::UnaryError { v, op })?,
+                        v => self.make_runtime_error(RuntimeError::Unary { v, op })?,
                     }
                 }
                 Op::Add => {
@@ -110,7 +127,7 @@ impl VM {
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l + r),
-                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
+                        _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -119,7 +136,7 @@ impl VM {
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l - r),
-                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
+                        _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -128,7 +145,7 @@ impl VM {
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l * r),
-                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
+                        _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -137,7 +154,7 @@ impl VM {
                     let lhs = self.pop();
                     let res = match (lhs, rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l / r),
-                        _ => Err(Error::BinaryError { lhs, rhs, op })?,
+                        _ => self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?,
                     };
                     self.push(res);
                 }
@@ -148,7 +165,7 @@ impl VM {
                     let v = self.pop();
                     match VM::is_falsey(&v) {
                         Some(v) => self.push(Value::Bool(v)),
-                        None => Err(Error::UnaryError { v, op })?,
+                        None => self.make_runtime_error(RuntimeError::Unary { v, op })?,
                     }
                 }
                 Op::Equal => {
@@ -195,7 +212,7 @@ impl VM {
     }
 
     pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
-        let chunk = Compiler::compile(source).map_err(|e| Error::CompileError(e))?;
+        let chunk = Compiler::compile(source).map_err(|e| Error::Compiler(e))?;
         self.interpret(chunk)?;
         Ok(())
     }

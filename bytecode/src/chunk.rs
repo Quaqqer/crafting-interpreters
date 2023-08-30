@@ -99,6 +99,10 @@ impl Chunk {
     pub fn len(&self) -> usize {
         self.code.len()
     }
+
+    pub fn get_line(&self, offset: usize) -> u32 {
+        self.lines[offset]
+    }
 }
 
 impl std::fmt::Display for Chunk {
