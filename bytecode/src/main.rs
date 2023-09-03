@@ -3,9 +3,9 @@ mod compiler;
 mod lox;
 mod op;
 mod scanner;
+mod token;
 mod value;
 mod vm;
-mod token;
 
 fn main() {
     lox::cli();

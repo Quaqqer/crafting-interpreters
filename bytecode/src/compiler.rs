@@ -355,7 +355,9 @@ impl Compiler {
             self.emit(&t, Op::Nil);
         }
 
-        let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(t.source.clone()))));
+        let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
+            t.source.clone(),
+        ))));
         self.emit(&t, Op::DefineGlobal(c));
 
         self.consume(TokenKind::Semicolon)?;
