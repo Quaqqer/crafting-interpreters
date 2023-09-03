@@ -395,15 +395,20 @@ mod tests {
         let mut io = MockedIO::new();
         let mut vm = VM::new(&mut io);
         vm.interpret_str(src).unwrap();
-        assert_eq!(io.out, expected);
+        assert_eq!(io.out, expected.to_string() + "\n");
     }
 
     #[test]
-    fn compile_and_interpret() {
+    fn cor_basic() {
         check_out(
             "var a = 2;
              print a;",
-            "2\n",
+            "2",
         );
+    }
+
+    #[test]
+    fn cor_precedence() {
+        check_out("print 2 * 3 + 5 * 7 + 1;", "42");
     }
 }
