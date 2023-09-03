@@ -7,11 +7,30 @@ use crate::{
     value::{HeapValue, Value},
 };
 
-pub struct VM {
+pub trait VmIO {
+    fn write(&mut self, s: &str);
+}
+
+pub struct DefaultVMIO {}
+
+impl DefaultVMIO {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl VmIO for DefaultVMIO {
+    fn write(&mut self, s: &str) {
+        println!("{}", s);
+    }
+}
+
+pub struct VM<'a, IO: VmIO = DefaultVMIO> {
     chunk: Chunk,
     ii: usize,
     stack: Vec<Value>,
     globals: HashMap<String, Value>,
+    io: &'a mut IO,
 }
 
 #[derive(Debug)]
@@ -70,13 +89,14 @@ impl std::fmt::Display for RuntimeError {
     }
 }
 
-impl VM {
-    pub fn new() -> Self {
+impl<'a, IO: VmIO> VM<'a, IO> {
+    pub fn new(io: &'a mut IO) -> Self {
         Self {
             chunk: Chunk::new(),
             ii: 0,
             stack: Vec::new(),
             globals: HashMap::new(),
+            io,
         }
     }
 
@@ -94,7 +114,7 @@ impl VM {
         }
     }
 
-    fn make_runtime_error<T>(&self, kind: RuntimeError) -> Result<T, Error> {
+    fn make_runtime_error<U>(&self, kind: RuntimeError) -> Result<U, Error> {
         Err(Error::Runtime {
             line: self.chunk.get_line(self.ii),
             kind,
@@ -114,7 +134,8 @@ impl VM {
 
             match op {
                 Op::Return => {
-                    println!("{}", self.pop());
+                    let s = format!("{}", self.pop());
+                    self.io.write(s.as_str());
                 }
                 Op::Constant(offset) => {
                     let v = self.chunk.read_constant(offset).unwrap().clone();
@@ -175,7 +196,7 @@ impl VM {
                 Op::Nil => self.push(Value::Nil),
                 Op::Not => {
                     let v = self.pop();
-                    match VM::is_falsey(&v) {
+                    match Self::is_falsey(&v) {
                         Some(v) => self.push(Value::Bool(v)),
                         None => self.make_runtime_error(RuntimeError::Unary { v, op })?,
                     }
@@ -213,7 +234,8 @@ impl VM {
                     self.push(Value::Bool(res));
                 }
                 Op::Print => {
-                    println!("{}", self.pop());
+                    let s = format!("{}", self.pop());
+                    self.io.write(s.as_str());
                 }
                 Op::Pop => {
                     self.pop();
@@ -257,7 +279,7 @@ impl VM {
         }
     }
 
-    pub fn interpret_str(&mut self, source: &str, repl: bool) -> Result<(), Error> {
+    pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
         let chunk = Compiler::compile(source).map_err(|e| Error::Compiler(e))?;
         self.interpret(chunk)?;
         Ok(())
@@ -274,8 +296,15 @@ impl VM {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chunk::Chunk, op::Op, value::Value, vm::VM};
+    use crate::{
+        chunk::Chunk,
+        op::Op,
+        value::Value,
+        vm::{DefaultVMIO, VM},
+    };
     use pretty_assertions::assert_eq;
+
+    use super::VmIO;
 
     fn create_chunk(constants: Vec<Value>, ops: Vec<Op>) -> Chunk {
         let mut chunk = Chunk::new();
@@ -290,7 +319,8 @@ mod tests {
 
     fn test_vm(constants: Vec<Value>, ops: Vec<Op>, stack: Vec<Value>) {
         let chunk = create_chunk(constants, ops);
-        let mut vm = VM::new();
+        let mut io = DefaultVMIO::new();
+        let mut vm = VM::new(&mut io);
         vm.interpret(chunk).unwrap();
         assert_eq!(vm.stack, stack);
     }
@@ -341,6 +371,39 @@ mod tests {
             vec![Value::Number(2.)],
             vec![Op::Constant(0), Op::Constant(0), Op::Divide],
             vec![Value::Number(1.)],
+        );
+    }
+
+    struct MockedIO {
+        out: String,
+    }
+
+    impl VmIO for MockedIO {
+        fn write(&mut self, s: &str) {
+            self.out += s;
+            self.out += "\n";
+        }
+    }
+
+    impl MockedIO {
+        fn new() -> Self {
+            Self { out: String::new() }
+        }
+    }
+
+    fn check_out(src: &str, expected: &str) {
+        let mut io = MockedIO::new();
+        let mut vm = VM::new(&mut io);
+        vm.interpret_str(src).unwrap();
+        assert_eq!(io.out, expected);
+    }
+
+    #[test]
+    fn compile_and_interpret() {
+        check_out(
+            "var a = 2;
+             print a;",
+            "2\n",
         );
     }
 }

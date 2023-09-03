@@ -2,7 +2,7 @@ use std::{io::Write, process};
 
 use clap::Parser;
 
-use crate::vm::{self, VM};
+use crate::vm::{self, DefaultVMIO, VM};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -21,7 +21,7 @@ pub fn cli() {
 }
 
 fn interpret(vm: &mut VM, s: &str, repl: bool) {
-    let res = vm.interpret_str(s, repl);
+    let res = vm.interpret_str(s);
     if let Err(e) = res {
         eprintln!("{}", e);
         if !repl {
@@ -34,7 +34,8 @@ fn interpret(vm: &mut VM, s: &str, repl: bool) {
 }
 
 pub fn repl() {
-    let mut vm = VM::new();
+    let mut io = DefaultVMIO::new();
+    let mut vm = VM::new(&mut io);
     loop {
         let mut line = String::new();
         print!("> ");
@@ -56,7 +57,8 @@ pub fn repl() {
 }
 
 pub fn run_file(path: &str) {
-    let mut vm = VM::new();
+    let mut io = DefaultVMIO::new();
+    let mut vm = VM::new(&mut io);
     let source = std::fs::read_to_string(path).unwrap();
     interpret(&mut vm, &source, false);
 }
