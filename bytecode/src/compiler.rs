@@ -4,26 +4,33 @@ use crate::{
     chunk::Chunk,
     op::Op,
     scanner::Scanner,
-    token::{Token, TokenKind},
+    token::{Token as T, TokenKind as TK},
     value::{HeapValue, Value},
 };
 
+struct Local {
+    name: String,
+    depth: u32,
+}
+
 pub struct Compiler {
-    peek: Option<Token>,
+    peek: Option<T>,
     scanner: Scanner,
     chunk: Chunk,
+    locals: Vec<Local>,
+    depth: u32,
 }
 
 #[derive(Debug)]
 pub struct Error {
-    at: Token,
+    at: T,
     kind: ErrorKind,
 }
 
 #[derive(Debug)]
 pub enum ErrorKind {
     ScanError,
-    ExpectedToken(TokenKind),
+    ExpectedT(TK),
     Expected(&'static str),
 }
 
@@ -63,26 +70,23 @@ impl Prec {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.at {
-            Token { line, .. } => write!(f, "[line {}]", line)?,
+            T { line, .. } => write!(f, "[line {}]", line)?,
         }
 
         write!(f, " Error")?;
 
         match &self.at {
-            Token {
-                kind: TokenKind::EOF,
-                ..
-            } => write!(f, " at end:\n")?,
-            Token { source, .. } => write!(f, " at '{}':\n", source)?,
+            T { kind: TK::EOF, .. } => write!(f, " at end:\n")?,
+            T { source, .. } => write!(f, " at '{}':\n", source)?,
         }
 
         match &self.kind {
             ErrorKind::ScanError => match self.at.kind {
-                TokenKind::UnknownChar => write!(f, "Unknown character"),
-                TokenKind::UnterminatedString => write!(f, "Unterminated string"),
+                TK::UnknownChar => write!(f, "Unknown character"),
+                TK::UnterminatedString => write!(f, "Unterminated string"),
                 _ => unreachable!(),
             },
-            ErrorKind::ExpectedToken(expected) => {
+            ErrorKind::ExpectedT(expected) => {
                 write!(f, "Expected {} but got {}", expected, &self.at.kind)
             }
             ErrorKind::Expected(s) => write!(f, "Expected {} but got {}", s, self.at.kind),
@@ -96,25 +100,27 @@ impl Compiler {
             peek: None,
             scanner: Scanner::new(src),
             chunk: Chunk::new(),
+            locals: Vec::new(),
+            depth: 0,
         }
     }
 
-    fn peek(&mut self) -> Result<Token, Error> {
+    fn peek(&mut self) -> Result<T, Error> {
         if self.peek.is_none() {
             self.peek = Some(self.advance()?);
         }
         Ok(self.peek.as_ref().unwrap().clone())
     }
 
-    fn advance(&mut self) -> Result<Token, Error> {
+    fn advance(&mut self) -> Result<T, Error> {
         if let Some(peeked) = self.peek.take() {
             Ok(peeked)
         } else {
             let t = self.scanner.scan_token();
 
             match &t {
-                Token { kind, .. } => match kind {
-                    TokenKind::UnknownChar | TokenKind::UnterminatedString => {
+                T { kind, .. } => match kind {
+                    TK::UnknownChar | TK::UnterminatedString => {
                         return self.make_error(&t, ErrorKind::ScanError)
                     }
                     _ => {}
@@ -124,27 +130,27 @@ impl Compiler {
         }
     }
 
-    fn make_error<T>(&self, at: &Token, kind: ErrorKind) -> Result<T, Error> {
+    fn make_error<T>(&self, at: &T, kind: ErrorKind) -> Result<T, Error> {
         Err(Error {
             at: at.clone(),
             kind,
         })
     }
 
-    fn consume(&mut self, kind: TokenKind) -> Result<Token, Error> {
+    fn consume(&mut self, kind: TK) -> Result<T, Error> {
         let next = self.advance()?;
         if next.kind == kind {
             Ok(next)
         } else {
-            self.make_error(&next, ErrorKind::ExpectedToken(kind))
+            self.make_error(&next, ErrorKind::ExpectedT(kind))
         }
     }
 
-    fn emit(&mut self, token: &Token, op: Op) {
+    fn emit(&mut self, token: &T, op: Op) {
         self.chunk.add_op(op, token.line);
     }
 
-    fn emits(&mut self, token: &Token, ops: &[Op]) {
+    fn emits(&mut self, token: &T, ops: &[Op]) {
         for op in ops {
             self.chunk.add_op(op.clone(), token.line);
         }
@@ -155,11 +161,11 @@ impl Compiler {
     }
 
     fn run(&mut self) -> Result<(), Error> {
-        while self.peek()?.kind != TokenKind::EOF {
+        while self.peek()?.kind != TK::EOF {
             self.declaration()?;
         }
 
-        self.consume(TokenKind::EOF)?;
+        self.consume(TK::EOF)?;
 
         #[cfg(feature = "debug_trace")]
         {
@@ -206,16 +212,16 @@ impl Compiler {
         self.precedence(rule.prec.next())?;
 
         match operator {
-            TokenKind::Plus => self.emit(&t, Op::Add),
-            TokenKind::Minus => self.emit(&t, Op::Subtract),
-            TokenKind::Star => self.emit(&t, Op::Multiply),
-            TokenKind::Slash => self.emit(&t, Op::Divide),
-            TokenKind::BangEqual => self.emits(&t, &[Op::Equal, Op::Not]),
-            TokenKind::EqualEqual => self.emit(&t, Op::Equal),
-            TokenKind::Greater => self.emit(&t, Op::Greater),
-            TokenKind::GreaterEqual => self.emits(&t, &[Op::Less, Op::Not]),
-            TokenKind::Less => self.emit(&t, Op::Less),
-            TokenKind::LessEqual => self.emits(&t, &[Op::Greater, Op::Not]),
+            TK::Plus => self.emit(&t, Op::Add),
+            TK::Minus => self.emit(&t, Op::Subtract),
+            TK::Star => self.emit(&t, Op::Multiply),
+            TK::Slash => self.emit(&t, Op::Divide),
+            TK::BangEqual => self.emits(&t, &[Op::Equal, Op::Not]),
+            TK::EqualEqual => self.emit(&t, Op::Equal),
+            TK::Greater => self.emit(&t, Op::Greater),
+            TK::GreaterEqual => self.emits(&t, &[Op::Less, Op::Not]),
+            TK::Less => self.emit(&t, Op::Less),
+            TK::LessEqual => self.emits(&t, &[Op::Greater, Op::Not]),
             _ => unreachable!(),
         };
 
@@ -227,9 +233,9 @@ impl Compiler {
     }
 
     fn grouping(&mut self) -> Result<(), Error> {
-        self.consume(TokenKind::LParen)?;
+        self.consume(TK::LParen)?;
         self.expression()?;
-        self.consume(TokenKind::RParen)?;
+        self.consume(TK::RParen)?;
         Ok(())
     }
 
@@ -246,11 +252,11 @@ impl Compiler {
         let operator = &t.kind;
         self.precedence(Prec::Unary)?;
         match operator {
-            TokenKind::Minus => {
+            TK::Minus => {
                 self.emit(&t, Op::Negate);
                 Ok(())
             }
-            TokenKind::Bang => {
+            TK::Bang => {
                 self.emit(&t, Op::Not);
                 Ok(())
             }
@@ -261,19 +267,19 @@ impl Compiler {
     fn literal(&mut self) -> Result<(), Error> {
         let t = self.advance()?;
         match &t.kind {
-            TokenKind::True => {
+            TK::True => {
                 self.emit(&t, Op::True);
                 Ok(())
             }
-            TokenKind::False => {
+            TK::False => {
                 self.emit(&t, Op::False);
                 Ok(())
             }
-            TokenKind::Nil => {
+            TK::Nil => {
                 self.emit(&t, Op::Nil);
                 Ok(())
             }
-            TokenKind::String => {
+            TK::String => {
                 let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
                     t.source[1..t.source.len() - 1].to_string(),
                 ))));
@@ -284,60 +290,58 @@ impl Compiler {
         }
     }
 
-    fn rule(&self, operator: &TokenKind) -> ParseRule {
+    fn rule(&self, operator: &TK) -> ParseRule {
         match operator {
-            TokenKind::LParen => p_rule(Some(Box::new(|c| c.grouping())), None, Prec::None),
-            TokenKind::RParen => p_rule(None, None, Prec::None),
-            TokenKind::LBrace => p_rule(None, None, Prec::None),
-            TokenKind::RBrace => p_rule(None, None, Prec::None),
-            TokenKind::Comma => p_rule(None, None, Prec::None),
-            TokenKind::Dot => p_rule(None, None, Prec::None),
-            TokenKind::Minus => p_rule(
+            TK::LParen => p_rule(Some(Box::new(|c| c.grouping())), None, Prec::None),
+            TK::RParen => p_rule(None, None, Prec::None),
+            TK::LBrace => p_rule(None, None, Prec::None),
+            TK::RBrace => p_rule(None, None, Prec::None),
+            TK::Comma => p_rule(None, None, Prec::None),
+            TK::Dot => p_rule(None, None, Prec::None),
+            TK::Minus => p_rule(
                 Some(Box::new(|c| c.unary())),
                 Some(Box::new(|c| c.binary())),
                 Prec::Term,
             ),
-            TokenKind::Plus => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Term),
-            TokenKind::Semicolon => p_rule(None, Some(Box::new(|c| c.binary())), Prec::None),
-            TokenKind::Slash => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
-            TokenKind::Star => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
-            TokenKind::Bang => p_rule(Some(Box::new(|c| c.unary())), None, Prec::None),
-            TokenKind::BangEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Equality),
-            TokenKind::Equal => p_rule(None, None, Prec::None),
-            TokenKind::EqualEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Equality),
-            TokenKind::Greater => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
-            TokenKind::GreaterEqual => {
-                p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison)
-            }
-            TokenKind::Less => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
-            TokenKind::LessEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
-            TokenKind::Identifier => p_rule(Some(Box::new(|c| c.var())), None, Prec::None),
-            TokenKind::String => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
-            TokenKind::Number => p_rule(Some(Box::new(|c| c.number())), None, Prec::None),
-            TokenKind::And => p_rule(None, None, Prec::None),
-            TokenKind::Class => p_rule(None, None, Prec::None),
-            TokenKind::Else => p_rule(None, None, Prec::None),
-            TokenKind::False => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
-            TokenKind::For => p_rule(None, None, Prec::None),
-            TokenKind::Fun => p_rule(None, None, Prec::None),
-            TokenKind::If => p_rule(None, None, Prec::None),
-            TokenKind::Nil => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
-            TokenKind::Or => p_rule(None, None, Prec::None),
-            TokenKind::Print => p_rule(None, None, Prec::None),
-            TokenKind::Return => p_rule(None, None, Prec::None),
-            TokenKind::Super => p_rule(None, None, Prec::None),
-            TokenKind::This => p_rule(None, None, Prec::None),
-            TokenKind::True => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
-            TokenKind::Var => p_rule(None, None, Prec::None),
-            TokenKind::While => p_rule(None, None, Prec::None),
-            TokenKind::EOF => p_rule(None, None, Prec::None),
-            TokenKind::UnknownChar => p_rule(None, None, Prec::None),
-            TokenKind::UnterminatedString => p_rule(None, None, Prec::None),
+            TK::Plus => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Term),
+            TK::Semicolon => p_rule(None, Some(Box::new(|c| c.binary())), Prec::None),
+            TK::Slash => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
+            TK::Star => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Factor),
+            TK::Bang => p_rule(Some(Box::new(|c| c.unary())), None, Prec::None),
+            TK::BangEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Equality),
+            TK::Equal => p_rule(None, None, Prec::None),
+            TK::EqualEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Equality),
+            TK::Greater => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
+            TK::GreaterEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
+            TK::Less => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
+            TK::LessEqual => p_rule(None, Some(Box::new(|c| c.binary())), Prec::Comparison),
+            TK::Identifier => p_rule(Some(Box::new(|c| c.var())), None, Prec::None),
+            TK::String => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
+            TK::Number => p_rule(Some(Box::new(|c| c.number())), None, Prec::None),
+            TK::And => p_rule(None, None, Prec::None),
+            TK::Class => p_rule(None, None, Prec::None),
+            TK::Else => p_rule(None, None, Prec::None),
+            TK::False => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
+            TK::For => p_rule(None, None, Prec::None),
+            TK::Fun => p_rule(None, None, Prec::None),
+            TK::If => p_rule(None, None, Prec::None),
+            TK::Nil => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
+            TK::Or => p_rule(None, None, Prec::None),
+            TK::Print => p_rule(None, None, Prec::None),
+            TK::Return => p_rule(None, None, Prec::None),
+            TK::Super => p_rule(None, None, Prec::None),
+            TK::This => p_rule(None, None, Prec::None),
+            TK::True => p_rule(Some(Box::new(|c| c.literal())), None, Prec::None),
+            TK::Var => p_rule(None, None, Prec::None),
+            TK::While => p_rule(None, None, Prec::None),
+            TK::EOF => p_rule(None, None, Prec::None),
+            TK::UnknownChar => p_rule(None, None, Prec::None),
+            TK::UnterminatedString => p_rule(None, None, Prec::None),
         }
     }
 
     fn declaration(&mut self) -> Result<(), Error> {
-        if self.peek()?.kind == TokenKind::Var {
+        if self.peek()?.kind == TK::Var {
             self.var_declaration()
         } else {
             self.statement()
@@ -345,10 +349,10 @@ impl Compiler {
     }
 
     fn var_declaration(&mut self) -> Result<(), Error> {
-        self.consume(TokenKind::Var)?;
-        let t = self.consume(TokenKind::Identifier)?;
+        self.consume(TK::Var)?;
+        let t = self.consume(TK::Identifier)?;
 
-        if self.peek()?.kind == TokenKind::Equal {
+        if self.peek()?.kind == TK::Equal {
             self.advance()?;
             self.expression()?;
         } else {
@@ -360,39 +364,71 @@ impl Compiler {
         ))));
         self.emit(&t, Op::DefineGlobal(c));
 
-        self.consume(TokenKind::Semicolon)?;
+        self.consume(TK::Semicolon)?;
         Ok(())
     }
 
     fn statement(&mut self) -> Result<(), Error> {
         let t = self.peek()?;
         match t.kind {
-            TokenKind::Print => self.print(),
+            TK::Print => self.print(),
+            TK::LBrace => {
+                self.begin_scope()?;
+                self.block()?;
+                self.end_scope()?;
+                Ok(())
+            }
             _ => self.expression_statement(),
         }
     }
 
     fn print(&mut self) -> Result<(), Error> {
-        let t = self.consume(TokenKind::Print)?;
+        let t = self.consume(TK::Print)?;
         self.expression()?;
         self.emit(&t, Op::Print);
-        self.consume(TokenKind::Semicolon)?;
+        self.consume(TK::Semicolon)?;
         Ok(())
     }
 
     fn expression_statement(&mut self) -> Result<(), Error> {
         self.expression()?;
-        let t = self.consume(TokenKind::Semicolon)?;
+        let t = self.consume(TK::Semicolon)?;
         self.emit(&t, Op::Pop);
         Ok(())
     }
 
     fn var(&mut self) -> Result<(), Error> {
-        let t = self.consume(TokenKind::Identifier)?;
+        let t = self.consume(TK::Identifier)?;
         let c = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
             t.source.clone(),
         ))));
         self.emit(&t, Op::GetGlobal(c));
+        Ok(())
+    }
+
+    fn begin_scope(&mut self) -> Result<(), Error> {
+        self.consume(TK::LBrace)?;
+        self.depth += 1;
+        Ok(())
+    }
+
+    fn block(&mut self) -> Result<(), Error> {
+        loop {
+            let tk = self.peek()?.kind;
+
+            if tk == TK::RBrace {
+                break;
+            } else {
+                self.declaration()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn end_scope(&mut self) -> Result<(), Error> {
+        self.consume(TK::LBrace)?;
+        self.depth -= 1;
         Ok(())
     }
 }
