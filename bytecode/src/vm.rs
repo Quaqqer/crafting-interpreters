@@ -240,8 +240,8 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                 Op::Pop => {
                     self.pop();
                 }
-                Op::DefineGlobal(offset) => {
-                    let v = self.chunk.read_constant(offset).unwrap().clone();
+                Op::DefineGlobal(c) => {
+                    let v = self.chunk.read_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -251,8 +251,8 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     let v = self.pop();
                     self.globals.insert(s.to_string(), v);
                 }
-                Op::GetGlobal(offset) => {
-                    let v = self.chunk.read_constant(offset).unwrap().clone();
+                Op::GetGlobal(c) => {
+                    let v = self.chunk.read_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -264,6 +264,27 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     } else {
                         self.make_runtime_error(RuntimeError::Undefined { i: s.to_string() })?;
                     }
+                }
+                Op::SetGlobal(c) => {
+                    let v = self.chunk.read_constant(c).unwrap().clone();
+                    let s = match &v {
+                        Value::HeapValue(h) => match &*h.as_ref() {
+                            HeapValue::String(s) => s,
+                        },
+                        _ => unreachable!(),
+                    };
+                    let val = self.peek();
+                    if let Some(v) = self.globals.get_mut(s) {
+                        *v = val;
+                    } else {
+                        self.make_runtime_error(RuntimeError::Undefined { i: s.to_string() })?;
+                    }
+                }
+                Op::GetLocal(l) => {
+                    self.push(self.stack[l as usize].clone());
+                }
+                Op::SetLocal(l) => {
+                    self.stack[l as usize] = self.peek();
                 }
             }
         }
@@ -291,6 +312,10 @@ impl<'a, IO: VmIO> VM<'a, IO> {
 
     fn pop(&mut self) -> Value {
         self.stack.pop().unwrap()
+    }
+
+    fn peek(&self) -> Value {
+        self.stack.last().unwrap().clone()
     }
 }
 

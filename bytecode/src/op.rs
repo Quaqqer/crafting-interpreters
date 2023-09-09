@@ -17,6 +17,9 @@ pub enum Opcode {
     Pop,
     DefineGlobal,
     GetGlobal,
+    SetGlobal,
+    GetLocal,
+    SetLocal,
 }
 
 impl From<Opcode> for u8 {
@@ -40,6 +43,9 @@ impl From<Opcode> for u8 {
             Opcode::Pop => 15,
             Opcode::DefineGlobal => 16,
             Opcode::GetGlobal => 17,
+            Opcode::SetGlobal => 18,
+            Opcode::GetLocal => 19,
+            Opcode::SetLocal => 20,
         }
     }
 }
@@ -65,6 +71,9 @@ impl From<u8> for Opcode {
             15 => Opcode::Pop,
             16 => Opcode::DefineGlobal,
             17 => Opcode::GetGlobal,
+            18 => Opcode::SetGlobal,
+            19 => Opcode::GetLocal,
+            20 => Opcode::SetLocal,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -90,6 +99,9 @@ pub enum Op {
     Pop,
     DefineGlobal(u8),
     GetGlobal(u8),
+    SetGlobal(u8),
+    GetLocal(u8),
+    SetLocal(u8),
 }
 
 impl std::fmt::Display for Op {
@@ -113,6 +125,9 @@ impl std::fmt::Display for Op {
             Op::Pop => write!(f, "POP"),
             Op::DefineGlobal(g) => write!(f, "DEFINE_GLOBAL {}", g),
             Op::GetGlobal(g) => write!(f, "GET_GLOBAL {}", g),
+            Op::SetGlobal(g) => write!(f, "SET_GLOBAL {}", g),
+            Op::GetLocal(l) => write!(f, "GET_LOCAL {}", l),
+            Op::SetLocal(l) => write!(f, "SET_LOCAL {}", l),
         }
     }
 }

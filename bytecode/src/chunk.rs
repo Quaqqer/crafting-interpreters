@@ -50,19 +50,19 @@ impl Chunk {
                 let g = self.code[offset + 1];
                 Ok((Op::GetGlobal(g), 2))
             }
+            Opcode::SetGlobal => {
+                let g = self.code[offset + 1];
+                Ok((Op::SetGlobal(g), 2))
+            }
+            Opcode::GetLocal => {
+                let l = self.code[offset + 1];
+                Ok((Op::GetLocal(l), 2))
+            }
+            Opcode::SetLocal => {
+                let l = self.code[offset + 1];
+                Ok((Op::SetLocal(l), 2))
+            }
         }
-    }
-
-    pub fn decode_ops(&self) -> Result<Vec<Op>, ()> {
-        let mut offset = 0;
-        let mut ops = Vec::new();
-        while offset < self.code.len() {
-            let (op, len) = self.decode_op(offset)?;
-            offset += len;
-            ops.push(op);
-        }
-
-        Ok(ops)
     }
 
     pub fn add_op(&mut self, op: Op, line: u32) {
@@ -93,6 +93,18 @@ impl Chunk {
             Op::GetGlobal(g) => {
                 self.add_basic(Opcode::GetGlobal, line);
                 self.add_code(g, line);
+            }
+            Op::SetGlobal(g) => {
+                self.add_basic(Opcode::SetGlobal, line);
+                self.add_code(g, line);
+            }
+            Op::GetLocal(l) => {
+                self.add_basic(Opcode::GetLocal, line);
+                self.add_code(l, line);
+            }
+            Op::SetLocal(l) => {
+                self.add_basic(Opcode::SetLocal, line);
+                self.add_code(l, line);
             }
         }
     }
