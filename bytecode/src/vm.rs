@@ -45,6 +45,7 @@ pub enum RuntimeError {
     Binary { lhs: Value, rhs: Value, op: Op },
     Unary { v: Value, op: Op },
     Undefined { i: String },
+    NonBool { v: Value },
 }
 
 impl std::fmt::Display for Error {
@@ -85,6 +86,11 @@ impl std::fmt::Display for RuntimeError {
             ),
 
             RuntimeError::Undefined { i } => write!(f, "No such variable '{}'", i),
+            RuntimeError::NonBool { v } => write!(
+                f,
+                "Cannot cast value of type {} into a boolean",
+                v.type_desc()
+            ),
         }
     }
 }
@@ -196,10 +202,8 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                 Op::Nil => self.push(Value::Nil),
                 Op::Not => {
                     let v = self.pop();
-                    match Self::is_falsey(&v) {
-                        Some(v) => self.push(Value::Bool(v)),
-                        None => self.make_runtime_error(RuntimeError::Unary { v, op })?,
-                    }
+                    let falsey = self.is_falsey(&v)?;
+                    self.push(Value::Bool(falsey));
                 }
                 Op::Equal => {
                     let rhs = self.pop();
@@ -286,17 +290,23 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                 Op::SetLocal(l) => {
                     self.stack[l as usize] = self.peek();
                 }
+                Op::JumpIfFalse(addr) => {
+                    let v = self.peek();
+                    if self.is_falsey(&v)? {
+                        self.ii += addr as usize;
+                    }
+                }
             }
         }
 
         Ok(())
     }
 
-    fn is_falsey(v: &Value) -> Option<bool> {
+    fn is_falsey(&mut self, v: &Value) -> Result<bool, Error> {
         match v {
-            Value::Nil => Some(true),
-            Value::Bool(b) => Some(!b),
-            _ => None,
+            Value::Nil => Ok(true),
+            Value::Bool(b) => Ok(!b),
+            _ => self.make_runtime_error(RuntimeError::NonBool { v: v.clone() }),
         }
     }
 

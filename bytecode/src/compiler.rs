@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
     chunk::Chunk,
-    op::Op,
+    op::{Op, Opcode},
     scanner::Scanner,
     token::{Token as T, TokenKind as TK},
     value::{HeapValue, Value},
@@ -441,6 +441,7 @@ impl Compiler {
         let t = self.peek()?;
         match t.kind {
             TK::Print => self.parse_print(),
+            TK::If => self.parse_if_statement(),
             TK::LBrace => self.parse_block(),
             _ => self.parse_expression_statement(),
         }
@@ -513,6 +514,19 @@ impl Compiler {
         Ok(res)
     }
 
+    fn parse_if_statement(&mut self) -> Result<(), Error> {
+        let t = self.consume(TK::If)?;
+        self.consume(TK::LParen)?;
+        self.parse_expression()?;
+        self.consume(TK::RParen)?;
+
+        let addr = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
+        self.parse_statement()?;
+        self.patch_jump(addr)?;
+
+        Ok(())
+    }
+
     fn parse_block(&mut self) -> Result<(), Error> {
         self.scoped(|c| {
             c.consume(TK::LBrace)?;
@@ -558,6 +572,21 @@ impl Compiler {
             }
         }
         Ok(None)
+    }
+
+    fn emit_jump(&mut self, opcode: Opcode, line: u32) -> Result<usize, Error> {
+        self.chunk.add_code(u8::from(opcode), line);
+        self.chunk.add_code(0xff, line);
+        self.chunk.add_code(0xff, line);
+        Ok(self.chunk.len() - 2)
+    }
+
+    fn patch_jump(&mut self, addr: usize) -> Result<(), Error> {
+        let jump = (self.chunk.code.len() - addr - 2) as u16;
+        let [l, r] = jump.to_le_bytes();
+        self.chunk.code[addr] = l;
+        self.chunk.code[addr + 1] = r;
+        Ok(())
     }
 }
 

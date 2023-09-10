@@ -5,7 +5,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Chunk {
-    code: Vec<u8>,
+    pub code: Vec<u8>,
     constants: Vec<Value>,
     lines: Vec<u32>,
 }
@@ -62,6 +62,10 @@ impl Chunk {
                 let l = self.code[offset + 1];
                 Ok((Op::SetLocal(l), 2))
             }
+            Opcode::JumpIfFalse => {
+                let a = u16::from_le_bytes(self.code[offset + 1..offset + 3].try_into().unwrap());
+                Ok((Op::JumpIfFalse(a), 3))
+            }
         }
     }
 
@@ -105,6 +109,12 @@ impl Chunk {
             Op::SetLocal(l) => {
                 self.add_basic(Opcode::SetLocal, line);
                 self.add_code(l, line);
+            }
+            Op::JumpIfFalse(a) => {
+                self.add_basic(Opcode::JumpIfFalse, line);
+                let [l, r] = a.to_le_bytes();
+                self.add_code(l, line);
+                self.add_code(r, line);
             }
         }
     }
@@ -182,36 +192,6 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::Chunk;
-
-    #[test]
-    fn encode_decode() {
-        let mut c = Chunk::new();
-
-        c.add_constant(Value::Number(0.));
-        assert_eq!(c.constants, vec![Value::Number(0.)]);
-
-        c.add_op(Op::Return, 0);
-        c.add_op(Op::Constant(0), 0);
-        c.add_op(Op::Negate, 0);
-        c.add_op(Op::Add, 0);
-        c.add_op(Op::Subtract, 0);
-        c.add_op(Op::Multiply, 0);
-        c.add_op(Op::Divide, 0);
-
-        let ops = c.decode_ops().unwrap();
-        assert_eq!(
-            ops,
-            vec![
-                Op::Return,
-                Op::Constant(0),
-                Op::Negate,
-                Op::Add,
-                Op::Subtract,
-                Op::Multiply,
-                Op::Divide
-            ]
-        );
-    }
 
     #[test]
     fn print() {

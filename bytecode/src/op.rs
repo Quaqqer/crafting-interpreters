@@ -20,6 +20,7 @@ pub enum Opcode {
     SetGlobal,
     GetLocal,
     SetLocal,
+    JumpIfFalse,
 }
 
 impl From<Opcode> for u8 {
@@ -46,6 +47,7 @@ impl From<Opcode> for u8 {
             Opcode::SetGlobal => 18,
             Opcode::GetLocal => 19,
             Opcode::SetLocal => 20,
+            Opcode::JumpIfFalse => 21,
         }
     }
 }
@@ -74,6 +76,7 @@ impl From<u8> for Opcode {
             18 => Opcode::SetGlobal,
             19 => Opcode::GetLocal,
             20 => Opcode::SetLocal,
+            21 => Opcode::JumpIfFalse,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -102,6 +105,7 @@ pub enum Op {
     SetGlobal(u8),
     GetLocal(u8),
     SetLocal(u8),
+    JumpIfFalse(u16),
 }
 
 impl std::fmt::Display for Op {
@@ -128,6 +132,7 @@ impl std::fmt::Display for Op {
             Op::SetGlobal(g) => write!(f, "SET_GLOBAL {}", g),
             Op::GetLocal(l) => write!(f, "GET_LOCAL {}", l),
             Op::SetLocal(l) => write!(f, "SET_LOCAL {}", l),
+            Op::JumpIfFalse(a) => write!(f, "JUMP_IF_FALSE {}", a),
         }
     }
 }
