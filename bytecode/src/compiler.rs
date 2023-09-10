@@ -360,7 +360,7 @@ impl Compiler {
             TK::Identifier => p_rule(Some(Box::new(|c, a| c.parse_var(a))), None, Prec::None),
             TK::String => p_rule(Some(Box::new(|c, a| c.parse_literal(a))), None, Prec::None),
             TK::Number => p_rule(Some(Box::new(|c, a| c.parse_number(a))), None, Prec::None),
-            TK::And => p_rule(None, None, Prec::None),
+            TK::And => p_rule(None, Some(Box::new(|c, _| c.parse_and())), Prec::And),
             TK::Class => p_rule(None, None, Prec::None),
             TK::Else => p_rule(None, None, Prec::None),
             TK::False => p_rule(Some(Box::new(|c, a| c.parse_literal(a))), None, Prec::None),
@@ -368,7 +368,7 @@ impl Compiler {
             TK::Fun => p_rule(None, None, Prec::None),
             TK::If => p_rule(None, None, Prec::None),
             TK::Nil => p_rule(Some(Box::new(|c, a| c.parse_literal(a))), None, Prec::None),
-            TK::Or => p_rule(None, None, Prec::None),
+            TK::Or => p_rule(None, Some(Box::new(|c, _| c.parse_or())), Prec::Or),
             TK::Print => p_rule(None, None, Prec::None),
             TK::Return => p_rule(None, None, Prec::None),
             TK::Super => p_rule(None, None, Prec::None),
@@ -596,6 +596,30 @@ impl Compiler {
         let [l, r] = jump.to_le_bytes();
         self.chunk.code[addr] = l;
         self.chunk.code[addr + 1] = r;
+        Ok(())
+    }
+
+    fn parse_and(&mut self) -> Result<(), Error> {
+        let t = self.consume(TK::And)?;
+        let end_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
+        self.emit(&t, Op::Pop);
+        self.parse_precedence(Prec::And)?;
+        self.patch_jump(end_jump)?;
+        Ok(())
+    }
+
+    fn parse_or(&mut self) -> Result<(), Error> {
+        let t = self.consume(TK::Or)?;
+
+        let else_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
+        let end_jump = self.emit_jump(Opcode::Jump, t.line)?;
+
+        self.patch_jump(else_jump)?;
+        self.emit(&t, Op::Pop);
+
+        self.parse_precedence(Prec::Or)?;
+        self.patch_jump(end_jump)?;
+
         Ok(())
     }
 }
