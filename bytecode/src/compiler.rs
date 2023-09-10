@@ -520,9 +520,19 @@ impl Compiler {
         self.parse_expression()?;
         self.consume(TK::RParen)?;
 
-        let addr = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
+        let then_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
+        self.emit(&t, Op::Pop);
         self.parse_statement()?;
-        self.patch_jump(addr)?;
+        let else_jump = self.emit_jump(Opcode::Jump, t.line)?;
+        self.patch_jump(then_jump)?;
+        self.emit(&t, Op::Pop);
+
+        if self.peek()?.kind == TK::Else {
+            self.consume(TK::Else)?;
+            self.parse_statement()?;
+        }
+
+        self.patch_jump(else_jump)?;
 
         Ok(())
     }

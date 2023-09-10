@@ -296,6 +296,9 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                         self.ii += addr as usize;
                     }
                 }
+                Op::Jump(addr) => {
+                    self.ii += addr as usize;
+                }
             }
         }
 

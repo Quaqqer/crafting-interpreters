@@ -66,6 +66,10 @@ impl Chunk {
                 let a = u16::from_le_bytes(self.code[offset + 1..offset + 3].try_into().unwrap());
                 Ok((Op::JumpIfFalse(a), 3))
             }
+            Opcode::Jump => {
+                let a = u16::from_le_bytes(self.code[offset + 1..offset + 3].try_into().unwrap());
+                Ok((Op::Jump(a), 3))
+            }
         }
     }
 
@@ -112,6 +116,12 @@ impl Chunk {
             }
             Op::JumpIfFalse(a) => {
                 self.add_basic(Opcode::JumpIfFalse, line);
+                let [l, r] = a.to_le_bytes();
+                self.add_code(l, line);
+                self.add_code(r, line);
+            }
+            Op::Jump(a) => {
+                self.add_basic(Opcode::Jump, line);
                 let [l, r] = a.to_le_bytes();
                 self.add_code(l, line);
                 self.add_code(r, line);
