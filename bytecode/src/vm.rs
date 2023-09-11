@@ -290,14 +290,17 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                 Op::SetLocal(l) => {
                     self.stack[l as usize] = self.peek();
                 }
-                Op::JumpIfFalse(addr) => {
+                Op::JumpIfFalse(j) => {
                     let v = self.peek();
                     if self.is_falsey(&v)? {
-                        self.ii += addr as usize;
+                        self.ii += j as usize;
                     }
                 }
-                Op::Jump(addr) => {
-                    self.ii += addr as usize;
+                Op::Jump(j) => {
+                    self.ii += j as usize;
+                }
+                Op::Loop(j) => {
+                    self.ii -= j as usize;
                 }
             }
         }
@@ -433,7 +436,7 @@ mod tests {
         let mut io = MockedIO::new();
         let mut vm = VM::new(&mut io);
         vm.interpret_str(src).unwrap();
-        assert_eq!(io.out, expected.to_string() + "\n");
+        assert_eq!(io.out.trim_end(), expected);
     }
 
     #[test]
@@ -448,5 +451,89 @@ mod tests {
     #[test]
     fn cor_precedence() {
         check_out("print 2 * 3 + 5 * 7 + 1;", "42");
+    }
+
+    #[test]
+    fn globals() {
+        check_out("var a; print a; a = 3; print a;", "nil\n3");
+    }
+
+    #[test]
+    fn locals() {
+        check_out("var a = 3; { var a = 2; print a; } print a;", "2\n3");
+    }
+
+    #[test]
+    fn if_() {
+        check_out("if (true) print \"a\";", "a");
+        check_out("if (false) print \"a\";", "");
+    }
+
+    #[test]
+    fn if_else() {
+        check_out(r#"if (true) print "a"; else print "b";"#, "a");
+        check_out(r#"if (false) print "a"; else print "b";"#, "b");
+    }
+
+    #[test]
+    fn while_loop() {
+        check_out(
+            r#"
+            var a = 0;
+            while (a < 5) {
+               print a;
+               a = a + 1;
+            }
+            "#,
+            "0\n1\n2\n3\n4",
+        )
+    }
+
+    #[test]
+    fn comparisons() {
+        check_out(
+            r#"
+            print 5 > 4;
+            print 4 < 5;
+            print 4 > 5;
+            print 5 < 4;
+            print 5 == 5;
+            print 5 != 5;
+            "#,
+            "true\ntrue\nfalse\nfalse\ntrue\nfalse",
+        )
+    }
+
+    #[test]
+    fn strings() {
+        check_out(
+            r#"
+            print "asd";
+            print "asd" + "basd";
+            print "asd" == "asd";
+            "#,
+            "asd\nasdbasd\ntrue",
+        )
+    }
+
+    #[test]
+    fn bool_comparison() {
+        check_out(
+            r#"
+            print true and "lala";
+            print false or "asd";
+            "#,
+            "lala\nasd",
+        )
+    }
+
+    #[test]
+    fn arithmetic() {
+        check_out(
+            r#"
+            print 1 + 2 + 3 * 4 - 7 / 7;
+            "#,
+            "14",
+        )
     }
 }

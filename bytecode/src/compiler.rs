@@ -434,7 +434,9 @@ impl Compiler {
     }
 
     fn define_variable(&mut self) {
-        self.locals.last_mut().unwrap().depth = self.depth;
+        if self.depth > 0 {
+            self.locals.last_mut().unwrap().depth = self.depth;
+        }
     }
 
     fn parse_statement(&mut self) -> Result<(), Error> {
@@ -442,6 +444,7 @@ impl Compiler {
         match t.kind {
             TK::Print => self.parse_print(),
             TK::If => self.parse_if_statement(),
+            TK::While => self.parse_while_statement(),
             TK::LBrace => self.parse_block(),
             _ => self.parse_expression_statement(),
         }
@@ -619,6 +622,38 @@ impl Compiler {
 
         self.parse_precedence(Prec::Or)?;
         self.patch_jump(end_jump)?;
+
+        Ok(())
+    }
+
+    fn parse_while_statement(&mut self) -> Result<(), Error> {
+        let t = self.consume(TK::While)?;
+        let loop_start = self.chunk.code.len();
+        self.consume(TK::LParen)?;
+        self.parse_expression()?;
+        self.consume(TK::RParen)?;
+
+        let exit_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
+        self.emit(&t, Op::Pop);
+        self.parse_statement()?;
+        self.emit_loop(loop_start, &t)?;
+
+        self.patch_jump(exit_jump)?;
+        self.emit(&t, Op::Pop);
+        Ok(())
+    }
+
+    fn emit_loop(&mut self, loop_start: usize, t: &T) -> Result<(), Error> {
+        self.chunk.add_code(u8::from(Opcode::Loop), t.line);
+
+        let offset = self.chunk.len() - loop_start + 2;
+        if offset > u16::MAX.into() {
+            self.make_error(t, ErrorKind::Str("Loop body too large"))?;
+        }
+        let [l, r] = (offset as u16).to_le_bytes();
+
+        self.chunk.add_code(l, t.line);
+        self.chunk.add_code(r, t.line);
 
         Ok(())
     }
