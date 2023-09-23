@@ -20,6 +20,7 @@ pub struct Compiler {
     chunk: Chunk,
     locals: Vec<Local>,
     depth: i32,
+    line: u32,
 }
 
 #[derive(Debug)]
@@ -109,6 +110,7 @@ impl Compiler {
             chunk: Chunk::new(),
             locals: Vec::new(),
             depth: 0,
+            line: 1,
         }
     }
 
@@ -120,7 +122,7 @@ impl Compiler {
     }
 
     fn advance(&mut self) -> Result<T, Error> {
-        if let Some(peeked) = self.peek.take() {
+        let t = if let Some(peeked) = self.peek.take() {
             Ok(peeked)
         } else {
             let t = self.scanner.scan_token();
@@ -134,7 +136,11 @@ impl Compiler {
                 },
             }
             Ok(t)
-        }
+        }?;
+
+        self.line = t.line;
+
+        Ok(t)
     }
 
     fn make_error<U>(&self, at: &T, kind: ErrorKind) -> Result<U, Error> {
@@ -172,13 +178,13 @@ impl Compiler {
         }
     }
 
-    fn emit(&mut self, token: &T, op: Op) {
-        self.chunk.add_op(op, token.line);
+    fn emit(&mut self, op: Op) {
+        self.chunk.add_op(op, self.line);
     }
 
-    fn emits(&mut self, token: &T, ops: &[Op]) {
+    fn emits(&mut self, ops: &[Op]) {
         for op in ops {
-            self.chunk.add_op(op.clone(), token.line);
+            self.chunk.add_op(op.clone(), self.line);
         }
     }
 
@@ -251,16 +257,16 @@ impl Compiler {
         self.parse_precedence(rule.prec.next())?;
 
         match operator {
-            TK::Plus => self.emit(&t, Op::Add),
-            TK::Minus => self.emit(&t, Op::Subtract),
-            TK::Star => self.emit(&t, Op::Multiply),
-            TK::Slash => self.emit(&t, Op::Divide),
-            TK::BangEqual => self.emits(&t, &[Op::Equal, Op::Not]),
-            TK::EqualEqual => self.emit(&t, Op::Equal),
-            TK::Greater => self.emit(&t, Op::Greater),
-            TK::GreaterEqual => self.emits(&t, &[Op::Less, Op::Not]),
-            TK::Less => self.emit(&t, Op::Less),
-            TK::LessEqual => self.emits(&t, &[Op::Greater, Op::Not]),
+            TK::Plus => self.emit(Op::Add),
+            TK::Minus => self.emit(Op::Subtract),
+            TK::Star => self.emit(Op::Multiply),
+            TK::Slash => self.emit(Op::Divide),
+            TK::BangEqual => self.emits(&[Op::Equal, Op::Not]),
+            TK::EqualEqual => self.emit(Op::Equal),
+            TK::Greater => self.emit(Op::Greater),
+            TK::GreaterEqual => self.emits(&[Op::Less, Op::Not]),
+            TK::Less => self.emit(Op::Less),
+            TK::LessEqual => self.emits(&[Op::Greater, Op::Not]),
             _ => unreachable!(),
         };
 
@@ -271,56 +277,56 @@ impl Compiler {
         self.parse_precedence(Prec::Assignment)
     }
 
-    fn parse_grouping(&mut self, can_assign: bool) -> Result<(), Error> {
+    fn parse_grouping(&mut self, _can_assign: bool) -> Result<(), Error> {
         self.consume(TK::LParen)?;
         self.parse_expression()?;
         self.consume(TK::RParen)?;
         Ok(())
     }
 
-    fn parse_number(&mut self, can_assign: bool) -> Result<(), Error> {
+    fn parse_number(&mut self, _can_assign: bool) -> Result<(), Error> {
         let t = self.advance()?;
         let number: f64 = t.source.parse().unwrap();
         let constant = self.emit_constant(Value::Number(number));
-        self.emit(&t, Op::Constant(constant));
+        self.emit(Op::Constant(constant));
         Ok(())
     }
 
-    fn parse_unary(&mut self, can_assign: bool) -> Result<(), Error> {
+    fn parse_unary(&mut self, _can_assign: bool) -> Result<(), Error> {
         let t = self.advance()?;
         let operator = &t.kind;
         self.parse_precedence(Prec::Unary)?;
         match operator {
             TK::Minus => {
-                self.emit(&t, Op::Negate);
+                self.emit(Op::Negate);
                 Ok(())
             }
             TK::Bang => {
-                self.emit(&t, Op::Not);
+                self.emit(Op::Not);
                 Ok(())
             }
             _ => unreachable!(),
         }
     }
 
-    fn parse_literal(&mut self, can_assign: bool) -> Result<(), Error> {
+    fn parse_literal(&mut self, _can_assign: bool) -> Result<(), Error> {
         let t = self.advance()?;
         match &t.kind {
             TK::True => {
-                self.emit(&t, Op::True);
+                self.emit(Op::True);
                 Ok(())
             }
             TK::False => {
-                self.emit(&t, Op::False);
+                self.emit(Op::False);
                 Ok(())
             }
             TK::Nil => {
-                self.emit(&t, Op::Nil);
+                self.emit(Op::Nil);
                 Ok(())
             }
             TK::String => {
                 let c = self.emit_string(&t.source[1..t.source.len() - 1]);
-                self.emit(&t, Op::Constant(c));
+                self.emit(Op::Constant(c));
                 Ok(())
             }
             _ => self.make_error(&t, ErrorKind::Expected("literal")),
@@ -419,7 +425,7 @@ impl Compiler {
             self.advance()?;
             self.parse_expression()?;
         } else {
-            self.emit(&t, Op::Nil);
+            self.emit(Op::Nil);
         }
 
         self.define_variable();
@@ -427,7 +433,7 @@ impl Compiler {
         if self.depth == 0 {
             let c = self.emit_string(t.source.as_str());
 
-            self.emit(&t, Op::DefineGlobal(c));
+            self.emit(Op::DefineGlobal(c));
         };
 
         self.consume(TK::Semicolon)?;
@@ -471,17 +477,17 @@ impl Compiler {
     }
 
     fn parse_print(&mut self) -> Result<(), Error> {
-        let t = self.consume(TK::Print)?;
+        self.consume(TK::Print)?;
         self.parse_expression()?;
-        self.emit(&t, Op::Print);
+        self.emit(Op::Print);
         self.consume(TK::Semicolon)?;
         Ok(())
     }
 
     fn parse_expression_statement(&mut self) -> Result<(), Error> {
         self.parse_expression()?;
-        let t = self.consume(TK::Semicolon)?;
-        self.emit(&t, Op::Pop);
+        self.consume(TK::Semicolon)?;
+        self.emit(Op::Pop);
         Ok(())
     }
 
@@ -500,9 +506,9 @@ impl Compiler {
         if can_assign && self.peek()?.kind == TK::Equal {
             self.consume(TK::Equal)?;
             self.parse_expression()?;
-            self.emit(&t, set);
+            self.emit(set);
         } else {
-            self.emit(&t, get);
+            self.emit(get);
         }
 
         Ok(())
@@ -519,15 +525,7 @@ impl Compiler {
         while let Some(l) = self.locals.last() {
             if l.depth == self.depth {
                 self.locals.pop();
-                // FIXME: Just emits a bad line, fix this
-                self.emit(
-                    &T {
-                        kind: TK::EOF,
-                        source: "".to_string(),
-                        line: 0,
-                    },
-                    Op::Pop,
-                );
+                self.emit(Op::Pop);
             } else {
                 break;
             }
@@ -544,11 +542,11 @@ impl Compiler {
         self.consume(TK::RParen)?;
 
         let then_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
-        self.emit(&t, Op::Pop);
+        self.emit(Op::Pop);
         self.parse_statement()?;
         let else_jump = self.emit_jump(Opcode::Jump, t.line)?;
         self.patch_jump(then_jump)?;
-        self.emit(&t, Op::Pop);
+        self.emit(Op::Pop);
 
         if self.peek()?.kind == TK::Else {
             self.consume(TK::Else)?;
@@ -625,7 +623,7 @@ impl Compiler {
     fn parse_and(&mut self) -> Result<(), Error> {
         let t = self.consume(TK::And)?;
         let end_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
-        self.emit(&t, Op::Pop);
+        self.emit(Op::Pop);
         self.parse_precedence(Prec::And)?;
         self.patch_jump(end_jump)?;
         Ok(())
@@ -638,7 +636,7 @@ impl Compiler {
         let end_jump = self.emit_jump(Opcode::Jump, t.line)?;
 
         self.patch_jump(else_jump)?;
-        self.emit(&t, Op::Pop);
+        self.emit(Op::Pop);
 
         self.parse_precedence(Prec::Or)?;
         self.patch_jump(end_jump)?;
@@ -654,12 +652,12 @@ impl Compiler {
         self.consume(TK::RParen)?;
 
         let exit_jump = self.emit_jump(Opcode::JumpIfFalse, t.line)?;
-        self.emit(&t, Op::Pop);
+        self.emit(Op::Pop);
         self.parse_statement()?;
         self.emit_loop(loop_start, &t)?;
 
         self.patch_jump(exit_jump)?;
-        self.emit(&t, Op::Pop);
+        self.emit(Op::Pop);
         Ok(())
     }
 
@@ -685,7 +683,7 @@ impl Compiler {
                 c.parse_expression()?;
                 c.consume(TK::Semicolon)?;
                 exit_jump = Some(c.emit_jump(Opcode::JumpIfFalse, t.line)?);
-                c.emit(&t, Op::Pop);
+                c.emit(Op::Pop);
             }
 
             // Parse
@@ -693,7 +691,7 @@ impl Compiler {
                 let body_jump = c.emit_jump(Opcode::Jump, t.line)?;
                 let increment_start = c.chunk.len();
                 c.parse_expression()?;
-                c.emit(&t, Op::Pop);
+                c.emit(Op::Pop);
                 c.consume(TK::RParen)?;
 
                 c.emit_loop(loop_start, &t)?;
@@ -706,7 +704,7 @@ impl Compiler {
 
             if let Some(j) = exit_jump {
                 c.patch_jump(j)?;
-                c.emit(&t, Op::Pop);
+                c.emit(Op::Pop);
             }
 
             Ok(())

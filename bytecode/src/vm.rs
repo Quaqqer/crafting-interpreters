@@ -132,6 +132,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
         self.ii = 0;
 
         loop {
+            #[cfg(feature = "debug_trace")]
             let prev_ii = self.ii;
 
             let op = if let Some(op) = self.fetch()? {
@@ -487,8 +488,8 @@ mod tests {
             r#"
             var a = 0;
             while (a < 5) {
-               print a;
-               a = a + 1;
+                print a;
+                a = a + 1;
             }
             "#,
             "0\n1\n2\n3\n4",
@@ -499,10 +500,41 @@ mod tests {
     fn for_loop() {
         check_out(
             r#"
-            for ()
+            for (var i = 0; i < 5; i = i + 1)
+                print i;
             "#,
             "0\n1\n2\n3\n4",
-        )
+        );
+
+        check_out(
+            r#"
+            var i = 0;
+            for (; i < 5; i = i + 1)
+                print i;
+            "#,
+            "0\n1\n2\n3\n4",
+        );
+
+        check_out(
+            r#"
+            var i = 0;
+            for (; i < 5;) {
+                print i;
+                i = i + 1;
+            }
+            "#,
+            "0\n1\n2\n3\n4",
+        );
+
+        check_out(
+            r#"
+            for (var i = 0; i < 5;) {
+                print i;
+                i = i + 1;
+            }
+            "#,
+            "0\n1\n2\n3\n4",
+        );
     }
 
     #[test]
