@@ -192,6 +192,11 @@ impl std::fmt::Display for Chunk {
                     write!(f, "DEFINE_GLOBAL {} ({})", g, self.constants[g as usize])?
                 }
                 Op::GetGlobal(g) => write!(f, "GET_GLOBAL {} ({})", g, self.constants[g as usize])?,
+                Op::Jump(j) => write!(f, "JUMP {} ({})", j, offset + len + j as usize)?,
+                Op::JumpIfFalse(j) => {
+                    write!(f, "JUMP_IF_FALSE {} ({})", j, offset + len + j as usize)?
+                }
+                Op::Loop(j) => write!(f, "LOOP {} ({})", j, offset + len - j as usize)?,
                 _ => write!(f, "{}", op)?,
             };
 

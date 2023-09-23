@@ -131,11 +131,17 @@ impl<'a, IO: VmIO> VM<'a, IO> {
         self.chunk = chunk;
         self.ii = 0;
 
-        while let Some(op) = self.fetch()? {
+        loop {
+            let prev_ii = self.ii;
+
+            let op = if let Some(op) = self.fetch()? {
+                op
+            } else {
+                break;
+            };
             #[cfg(feature = "debug_trace")]
             {
-                println!("{:?}", self.stack);
-                println!("{}", op);
+                eprintln!("{}-{} {} {:?}", prev_ii, self.ii, op, self.stack);
             }
 
             match op {
@@ -484,6 +490,16 @@ mod tests {
                print a;
                a = a + 1;
             }
+            "#,
+            "0\n1\n2\n3\n4",
+        )
+    }
+
+    #[test]
+    fn for_loop() {
+        check_out(
+            r#"
+            for ()
             "#,
             "0\n1\n2\n3\n4",
         )

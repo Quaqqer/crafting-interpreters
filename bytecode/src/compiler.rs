@@ -153,6 +153,25 @@ impl Compiler {
         }
     }
 
+    fn match_(&mut self, kind: TK) -> Result<bool, Error> {
+        let t = self.peek()?;
+        if t.kind == kind {
+            self.advance()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn match_peek(&mut self, kind: TK) -> Result<bool, Error> {
+        let t = self.peek()?;
+        if t.kind == kind {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
     fn emit(&mut self, token: &T, op: Op) {
         self.chunk.add_op(op, token.line);
     }
@@ -181,7 +200,7 @@ impl Compiler {
 
         #[cfg(feature = "debug_trace")]
         {
-            println!("=== Code ===\n{}", self.chunk);
+            eprintln!("=== Code ===\n{}", self.chunk);
         }
 
         Ok(())
@@ -445,6 +464,7 @@ impl Compiler {
             TK::Print => self.parse_print(),
             TK::If => self.parse_if_statement(),
             TK::While => self.parse_while_statement(),
+            TK::For => self.parse_for_statement(),
             TK::LBrace => self.parse_block(),
             _ => self.parse_expression_statement(),
         }
@@ -641,6 +661,56 @@ impl Compiler {
         self.patch_jump(exit_jump)?;
         self.emit(&t, Op::Pop);
         Ok(())
+    }
+
+    fn parse_for_statement(&mut self) -> Result<(), Error> {
+        self.scoped(|c| {
+            c.consume(TK::For)?;
+            let t = c.consume(TK::LParen)?;
+
+            // Parse declaration
+            if c.match_(TK::Semicolon)? {
+                // Do nothing
+            } else if c.match_peek(TK::Var)? {
+                c.parse_var_declaration()?;
+            } else {
+                c.parse_expression()?;
+            }
+
+            let mut loop_start = c.chunk.len();
+
+            // Parse condition
+            let mut exit_jump: Option<usize> = None;
+            if !c.match_(TK::Semicolon)? {
+                c.parse_expression()?;
+                c.consume(TK::Semicolon)?;
+                exit_jump = Some(c.emit_jump(Opcode::JumpIfFalse, t.line)?);
+                c.emit(&t, Op::Pop);
+            }
+
+            // Parse
+            if !c.match_(TK::RParen)? {
+                let body_jump = c.emit_jump(Opcode::Jump, t.line)?;
+                let increment_start = c.chunk.len();
+                c.parse_expression()?;
+                c.emit(&t, Op::Pop);
+                c.consume(TK::RParen)?;
+
+                c.emit_loop(loop_start, &t)?;
+                loop_start = increment_start;
+                c.patch_jump(body_jump)?;
+            }
+
+            c.parse_statement()?;
+            c.emit_loop(loop_start, &t)?;
+
+            if let Some(j) = exit_jump {
+                c.patch_jump(j)?;
+                c.emit(&t, Op::Pop);
+            }
+
+            Ok(())
+        })
     }
 
     fn emit_loop(&mut self, loop_start: usize, t: &T) -> Result<(), Error> {
