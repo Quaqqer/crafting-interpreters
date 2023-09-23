@@ -201,10 +201,13 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     let lhs = self.pop();
                     let res = match (&lhs, &rhs) {
                         (Value::Number(l), Value::Number(r)) => Value::Number(l + r),
-                        (Value::HeapValue(lhs), Value::HeapValue(rhs)) => {
-                            match (&*lhs.as_ref(), &*rhs.as_ref()) {
+                        (Value::HeapValue(hlhs), Value::HeapValue(hrhs)) => {
+                            match (&*hlhs.as_ref(), &*hrhs.as_ref()) {
                                 (HeapValue::String(l), HeapValue::String(r)) => {
                                     Value::HeapValue(Rc::new(HeapValue::String(l.to_owned() + r)))
+                                }
+                                _ => {
+                                    self.make_runtime_error(RuntimeError::Binary { lhs, rhs, op })?
                                 }
                             }
                         }
@@ -256,6 +259,10 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                         (Value::Nil, Value::Nil) => true,
                         (Value::HeapValue(lhs), Value::HeapValue(rhs)) => match (&*lhs, &*rhs) {
                             (HeapValue::String(l), HeapValue::String(r)) => l == r,
+                            (HeapValue::Function { .. }, HeapValue::Function { .. }) => {
+                                Rc::ptr_eq(&lhs, &rhs)
+                            }
+                            _ => false,
                         },
                         _ => false,
                     };
@@ -291,6 +298,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
+                            _ => unreachable!(),
                         },
                         _ => unreachable!(),
                     };
@@ -302,6 +310,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
+                            _ => unreachable!(),
                         },
                         _ => unreachable!(),
                     };
@@ -316,6 +325,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
+                            _ => unreachable!(),
                         },
                         _ => unreachable!(),
                     };

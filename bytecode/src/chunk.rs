@@ -14,7 +14,7 @@ use crate::{
 /// * `code`: The code in the chunk
 /// * `constants`: The constant values referenced in the code vector
 /// * `lines`: The lines referenced for each code byte
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Chunk {
     code: Vec<u8>,
     constants: Vec<Value>,
