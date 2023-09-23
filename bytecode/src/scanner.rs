@@ -1,5 +1,8 @@
+//! The lox token scanner
+
 use crate::token::{Token, TokenKind};
 
+/// Token scanner
 pub struct Scanner {
     source: Vec<char>,
     start: usize,
@@ -8,6 +11,7 @@ pub struct Scanner {
 }
 
 impl Scanner {
+    /// Create a new scanner from a source string
     pub fn new(source: &str) -> Self {
         Scanner {
             source: source.chars().collect(),
@@ -17,6 +21,7 @@ impl Scanner {
         }
     }
 
+    /// Scan one token and advance
     pub fn scan_token(&mut self) -> Token {
         self.skip_whitespace();
 

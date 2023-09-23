@@ -1,3 +1,5 @@
+//! The lox bytecode compiler
+
 use std::rc::Rc;
 
 use crate::{
@@ -14,7 +16,9 @@ struct Local {
     depth: i32,
 }
 
+/// The lox bytecode compiler
 pub struct Compiler {
+    /// The currently peeked token, used to allow 1 token lookahead
     peek: Option<T>,
     scanner: Scanner,
     chunk: Chunk,
@@ -23,19 +27,30 @@ pub struct Compiler {
     line: u32,
 }
 
+/// A compiler error
 #[derive(Debug)]
 pub struct Error {
     at: T,
     kind: ErrorKind,
 }
 
+/// A compiler error kind
 #[derive(Debug)]
 pub enum ErrorKind {
+    /// An unknown scan error
     ScanError,
+    /// Expected a certein token kind but instead got another
     ExpectedT(TK),
+    /// Expected a construct but got something else.
+    ///
+    /// For instance we could expect an expression but get a closing parenthesis
     Expected(&'static str),
+    /// We have too many local variables, currently only 256 local variables can exist at any one
+    /// time
     LocalLimit,
+    /// A duplicate variable definition of the same name in the same scope
     DuplicateVar,
+    /// A hand crafted error string
     Str(&'static str),
 }
 
@@ -179,22 +194,22 @@ impl Compiler {
     }
 
     fn emit(&mut self, op: Op) {
-        self.chunk.add_op(op, self.line);
+        self.chunk.push_op(op, self.line);
     }
 
     fn emits(&mut self, ops: &[Op]) {
         for op in ops {
-            self.chunk.add_op(op.clone(), self.line);
+            self.chunk.push_op(op.clone(), self.line);
         }
     }
 
     fn emit_constant(&mut self, v: Value) -> u8 {
-        self.chunk.add_constant(v)
+        self.chunk.push_constant(v)
     }
 
     fn emit_string(&mut self, s: &str) -> u8 {
         self.chunk
-            .add_constant(Value::HeapValue(Rc::new(HeapValue::String(s.to_string()))))
+            .push_constant(Value::HeapValue(Rc::new(HeapValue::String(s.to_string()))))
     }
 
     fn parse(&mut self) -> Result<(), Error> {
@@ -212,6 +227,7 @@ impl Compiler {
         Ok(())
     }
 
+    /// Run the compiler
     pub fn compile(src: &str) -> Result<Chunk, Error> {
         let mut compiler = Compiler::new(src);
         compiler.parse()?;
@@ -606,17 +622,17 @@ impl Compiler {
     }
 
     fn emit_jump(&mut self, opcode: Opcode, line: u32) -> Result<usize, Error> {
-        self.chunk.add_code(u8::from(opcode), line);
-        self.chunk.add_code(0xff, line);
-        self.chunk.add_code(0xff, line);
-        Ok(self.chunk.len() - 2)
+        self.chunk.push(u8::from(opcode), line);
+        self.chunk.push(0xff, line);
+        self.chunk.push(0xff, line);
+        Ok(self.chunk.get_offset() - 2)
     }
 
     fn patch_jump(&mut self, addr: usize) -> Result<(), Error> {
-        let jump = (self.chunk.code.len() - addr - 2) as u16;
+        let jump = (self.chunk.get_offset() - addr - 2) as u16;
         let [l, r] = jump.to_le_bytes();
-        self.chunk.code[addr] = l;
-        self.chunk.code[addr + 1] = r;
+        self.chunk.set_byte(addr, l);
+        self.chunk.set_byte(addr + 1, r);
         Ok(())
     }
 
@@ -646,7 +662,7 @@ impl Compiler {
 
     fn parse_while_statement(&mut self) -> Result<(), Error> {
         let t = self.consume(TK::While)?;
-        let loop_start = self.chunk.code.len();
+        let loop_start = self.chunk.get_offset();
         self.consume(TK::LParen)?;
         self.parse_expression()?;
         self.consume(TK::RParen)?;
@@ -675,7 +691,7 @@ impl Compiler {
                 c.parse_expression()?;
             }
 
-            let mut loop_start = c.chunk.len();
+            let mut loop_start = c.chunk.get_offset();
 
             // Parse condition
             let mut exit_jump: Option<usize> = None;
@@ -689,7 +705,7 @@ impl Compiler {
             // Parse
             if !c.match_(TK::RParen)? {
                 let body_jump = c.emit_jump(Opcode::Jump, t.line)?;
-                let increment_start = c.chunk.len();
+                let increment_start = c.chunk.get_offset();
                 c.parse_expression()?;
                 c.emit(Op::Pop);
                 c.consume(TK::RParen)?;
@@ -712,16 +728,16 @@ impl Compiler {
     }
 
     fn emit_loop(&mut self, loop_start: usize, t: &T) -> Result<(), Error> {
-        self.chunk.add_code(u8::from(Opcode::Loop), t.line);
+        self.chunk.push(u8::from(Opcode::Loop), t.line);
 
-        let offset = self.chunk.len() - loop_start + 2;
+        let offset = self.chunk.get_offset() - loop_start + 2;
         if offset > u16::MAX.into() {
             self.make_error(t, ErrorKind::Str("Loop body too large"))?;
         }
         let [l, r] = (offset as u16).to_le_bytes();
 
-        self.chunk.add_code(l, t.line);
-        self.chunk.add_code(r, t.line);
+        self.chunk.push(l, t.line);
+        self.chunk.push(r, t.line);
 
         Ok(())
     }

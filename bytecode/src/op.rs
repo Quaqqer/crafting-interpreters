@@ -1,3 +1,7 @@
+//! Opcodes and full operations for the lox language
+
+#[allow(missing_docs)]
+/// An opcode
 pub enum Opcode {
     Return,
     Constant,
@@ -88,7 +92,9 @@ impl From<u8> for Opcode {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Debug, PartialEq, Clone)]
+/// A full lox vm operation, opcode with arguments
 pub enum Op {
     Return,
     Constant(u8),

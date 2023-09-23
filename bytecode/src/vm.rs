@@ -1,3 +1,5 @@
+//! The lox virtual machine implementation
+
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{
@@ -7,13 +9,17 @@ use crate::{
     value::{HeapValue, Value},
 };
 
+/// The trait providing the VM with IO
 pub trait VmIO {
+    /// Write a string to the output
     fn write(&mut self, s: &str);
 }
 
+/// The default VM IO, uses stdout
 pub struct DefaultVMIO {}
 
 impl DefaultVMIO {
+    /// Create the default VM IO
     pub fn new() -> Self {
         Self {}
     }
@@ -25,6 +31,7 @@ impl VmIO for DefaultVMIO {
     }
 }
 
+/// The VM
 pub struct VM<'a, IO: VmIO = DefaultVMIO> {
     chunk: Chunk,
     ii: usize,
@@ -34,18 +41,44 @@ pub struct VM<'a, IO: VmIO = DefaultVMIO> {
 }
 
 #[derive(Debug)]
+/// A VM error
 pub enum Error {
+    /// A compile error
     Compiler(compiler::Error),
-    Runtime { line: u32, kind: RuntimeError },
+    /// A runtime error
+    Runtime {
+        /// The line causing the error
+        line: u32,
+        /// The kind of error
+        kind: RuntimeError,
+    },
 }
 
 #[derive(Debug)]
+/// A runtime error
 pub enum RuntimeError {
+    /// A operation decode error
     Decode(usize),
-    Binary { lhs: Value, rhs: Value, op: Op },
-    Unary { v: Value, op: Op },
-    Undefined { i: String },
-    NonBool { v: Value },
+    /// An unsupported binary operation between two values
+    Binary {
+        /// The left hand side of the operation
+        lhs: Value,
+        /// The right hand side of the operation
+        rhs: Value,
+        /// The binary operation
+        op: Op,
+    },
+    /// An unsupported unary operation on a value
+    Unary {
+        /// The value the unary was tried to operate on
+        v: Value,
+        /// The unary operation
+        op: Op,
+    },
+    /// An undefined global variable
+    Undefined(String),
+    /// A non-boolean value used in a boolean context
+    NonBool(Value),
 }
 
 impl std::fmt::Display for Error {
@@ -85,8 +118,8 @@ impl std::fmt::Display for RuntimeError {
                 v.type_desc()
             ),
 
-            RuntimeError::Undefined { i } => write!(f, "No such variable '{}'", i),
-            RuntimeError::NonBool { v } => write!(
+            RuntimeError::Undefined(i) => write!(f, "No such variable '{}'", i),
+            RuntimeError::NonBool(v) => write!(
                 f,
                 "Cannot cast value of type {} into a boolean",
                 v.type_desc()
@@ -96,6 +129,7 @@ impl std::fmt::Display for RuntimeError {
 }
 
 impl<'a, IO: VmIO> VM<'a, IO> {
+    /// Create a new VM
     pub fn new(io: &'a mut IO) -> Self {
         Self {
             chunk: Chunk::new(),
@@ -107,7 +141,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
     }
 
     fn fetch(&mut self) -> Result<Option<Op>, Error> {
-        if self.ii >= self.chunk.len() {
+        if self.ii >= self.chunk.get_offset() {
             return Ok(None);
         }
 
@@ -127,6 +161,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
         })
     }
 
+    /// Interpret a code chunk
     pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Error> {
         self.chunk = chunk;
         self.ii = 0;
@@ -151,7 +186,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     self.io.write(s.as_str());
                 }
                 Op::Constant(offset) => {
-                    let v = self.chunk.read_constant(offset).unwrap().clone();
+                    let v = self.chunk.get_constant(offset).unwrap().clone();
                     self.push(v);
                 }
                 Op::Negate => {
@@ -252,7 +287,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     self.pop();
                 }
                 Op::DefineGlobal(c) => {
-                    let v = self.chunk.read_constant(c).unwrap().clone();
+                    let v = self.chunk.get_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -263,7 +298,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     self.globals.insert(s.to_string(), v);
                 }
                 Op::GetGlobal(c) => {
-                    let v = self.chunk.read_constant(c).unwrap().clone();
+                    let v = self.chunk.get_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -273,11 +308,11 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     if let Some(v) = self.globals.get(s) {
                         self.push(v.clone());
                     } else {
-                        self.make_runtime_error(RuntimeError::Undefined { i: s.to_string() })?;
+                        self.make_runtime_error(RuntimeError::Undefined(s.to_string()))?;
                     }
                 }
                 Op::SetGlobal(c) => {
-                    let v = self.chunk.read_constant(c).unwrap().clone();
+                    let v = self.chunk.get_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -288,7 +323,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     if let Some(v) = self.globals.get_mut(s) {
                         *v = val;
                     } else {
-                        self.make_runtime_error(RuntimeError::Undefined { i: s.to_string() })?;
+                        self.make_runtime_error(RuntimeError::Undefined(s.to_string()))?;
                     }
                 }
                 Op::GetLocal(l) => {
@@ -319,10 +354,11 @@ impl<'a, IO: VmIO> VM<'a, IO> {
         match v {
             Value::Nil => Ok(true),
             Value::Bool(b) => Ok(!b),
-            _ => self.make_runtime_error(RuntimeError::NonBool { v: v.clone() }),
+            _ => self.make_runtime_error(RuntimeError::NonBool(v.clone())),
         }
     }
 
+    /// Interpret a string by compiling and interpreting the resulting code chunk
     pub fn interpret_str(&mut self, source: &str) -> Result<(), Error> {
         let chunk = Compiler::compile(source).map_err(|e| Error::Compiler(e))?;
         self.interpret(chunk)?;
@@ -357,10 +393,10 @@ mod tests {
     fn create_chunk(constants: Vec<Value>, ops: Vec<Op>) -> Chunk {
         let mut chunk = Chunk::new();
         for c in constants {
-            chunk.add_constant(c);
+            chunk.push_constant(c);
         }
         for op in ops {
-            chunk.add_op(op, 0);
+            chunk.push_op(op, 0);
         }
         chunk
     }

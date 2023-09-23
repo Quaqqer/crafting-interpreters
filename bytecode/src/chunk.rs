@@ -1,16 +1,28 @@
+//! Lox bytecode chunks
+
 use crate::{
     op::{Op, Opcode},
     value::Value,
 };
 
+/// A lox bytecode chunk
+///
+/// The lox bytecode contains the bytecode that the lox vm runs. The chunk also contains a vector
+/// of constants since we don't inline values in the bytecode, but rather reference values in the
+/// constants vector. It also contains the line in the source code that the instructions came from.
+///
+/// * `code`: The code in the chunk
+/// * `constants`: The constant values referenced in the code vector
+/// * `lines`: The lines referenced for each code byte
 #[derive(Debug)]
 pub struct Chunk {
-    pub code: Vec<u8>,
+    code: Vec<u8>,
     constants: Vec<Value>,
     lines: Vec<u32>,
 }
 
 impl Chunk {
+    /// Create a new chunk
     pub fn new() -> Self {
         Self {
             code: Vec::new(),
@@ -19,6 +31,9 @@ impl Chunk {
         }
     }
 
+    /// Decode an operation from an offset
+    ///
+    /// If the offset is invalid or contains an invalid operation this will panic.
     pub fn decode_op(&self, offset: usize) -> Result<(Op, usize), ()> {
         let opcode = Opcode::from(self.code[offset]);
 
@@ -77,93 +92,109 @@ impl Chunk {
         }
     }
 
-    pub fn add_op(&mut self, op: Op, line: u32) {
+    /// Push an operation to the chunk.
+    pub fn push_op(&mut self, op: Op, line: u32) {
         match op {
-            Op::Return => self.add_basic(Opcode::Return, line),
+            Op::Return => self.push_opcode(Opcode::Return, line),
             Op::Constant(offset) => {
-                self.add_basic(Opcode::Constant, line);
-                self.add_code(offset, line);
+                self.push_opcode(Opcode::Constant, line);
+                self.push(offset, line);
             }
-            Op::Negate => self.add_basic(Opcode::Negate, line),
-            Op::Add => self.add_basic(Opcode::Add, line),
-            Op::Subtract => self.add_basic(Opcode::Subtract, line),
-            Op::Multiply => self.add_basic(Opcode::Multiply, line),
-            Op::Divide => self.add_basic(Opcode::Divide, line),
-            Op::True => self.add_basic(Opcode::True, line),
-            Op::False => self.add_basic(Opcode::False, line),
-            Op::Nil => self.add_basic(Opcode::Nil, line),
-            Op::Not => self.add_basic(Opcode::Not, line),
-            Op::Equal => self.add_basic(Opcode::Equal, line),
-            Op::Greater => self.add_basic(Opcode::Greater, line),
-            Op::Less => self.add_basic(Opcode::Less, line),
-            Op::Print => self.add_basic(Opcode::Print, line),
-            Op::Pop => self.add_basic(Opcode::Pop, line),
+            Op::Negate => self.push_opcode(Opcode::Negate, line),
+            Op::Add => self.push_opcode(Opcode::Add, line),
+            Op::Subtract => self.push_opcode(Opcode::Subtract, line),
+            Op::Multiply => self.push_opcode(Opcode::Multiply, line),
+            Op::Divide => self.push_opcode(Opcode::Divide, line),
+            Op::True => self.push_opcode(Opcode::True, line),
+            Op::False => self.push_opcode(Opcode::False, line),
+            Op::Nil => self.push_opcode(Opcode::Nil, line),
+            Op::Not => self.push_opcode(Opcode::Not, line),
+            Op::Equal => self.push_opcode(Opcode::Equal, line),
+            Op::Greater => self.push_opcode(Opcode::Greater, line),
+            Op::Less => self.push_opcode(Opcode::Less, line),
+            Op::Print => self.push_opcode(Opcode::Print, line),
+            Op::Pop => self.push_opcode(Opcode::Pop, line),
             Op::DefineGlobal(g) => {
-                self.add_basic(Opcode::DefineGlobal, line);
-                self.add_code(g, line);
+                self.push_opcode(Opcode::DefineGlobal, line);
+                self.push(g, line);
             }
             Op::GetGlobal(g) => {
-                self.add_basic(Opcode::GetGlobal, line);
-                self.add_code(g, line);
+                self.push_opcode(Opcode::GetGlobal, line);
+                self.push(g, line);
             }
             Op::SetGlobal(g) => {
-                self.add_basic(Opcode::SetGlobal, line);
-                self.add_code(g, line);
+                self.push_opcode(Opcode::SetGlobal, line);
+                self.push(g, line);
             }
             Op::GetLocal(l) => {
-                self.add_basic(Opcode::GetLocal, line);
-                self.add_code(l, line);
+                self.push_opcode(Opcode::GetLocal, line);
+                self.push(l, line);
             }
             Op::SetLocal(l) => {
-                self.add_basic(Opcode::SetLocal, line);
-                self.add_code(l, line);
+                self.push_opcode(Opcode::SetLocal, line);
+                self.push(l, line);
             }
             Op::JumpIfFalse(a) => {
-                self.add_basic(Opcode::JumpIfFalse, line);
+                self.push_opcode(Opcode::JumpIfFalse, line);
                 let [l, r] = a.to_le_bytes();
-                self.add_code(l, line);
-                self.add_code(r, line);
+                self.push(l, line);
+                self.push(r, line);
             }
             Op::Jump(a) => {
-                self.add_basic(Opcode::Jump, line);
+                self.push_opcode(Opcode::Jump, line);
                 let [l, r] = a.to_le_bytes();
-                self.add_code(l, line);
-                self.add_code(r, line);
+                self.push(l, line);
+                self.push(r, line);
             }
             Op::Loop(a) => {
-                self.add_basic(Opcode::Jump, line);
+                self.push_opcode(Opcode::Jump, line);
                 let [l, r] = a.to_le_bytes();
-                self.add_code(l, line);
-                self.add_code(r, line);
+                self.push(l, line);
+                self.push(r, line);
             }
         }
     }
 
-    pub fn add_code(&mut self, v: u8, line: u32) {
-        self.code.push(v);
+    /// Push a byte to the chunk
+    pub fn push(&mut self, byte: u8, line: u32) {
+        self.code.push(byte);
         self.lines.push(line);
     }
 
-    fn add_basic(&mut self, opcode: Opcode, line: u32) {
-        self.add_code(u8::from(opcode), line);
+    /// Push an opcode to the chunk
+    fn push_opcode(&mut self, opcode: Opcode, line: u32) {
+        self.push(u8::from(opcode), line);
     }
 
-    pub fn add_constant(&mut self, v: Value) -> u8 {
+    /// Push a constant to the chunk, returns the constant offset of the value
+    pub fn push_constant(&mut self, v: Value) -> u8 {
         let i = self.constants.len();
         self.constants.push(v);
         i as u8
     }
 
-    pub fn read_constant(&mut self, offset: u8) -> Option<&Value> {
+    /// Get a constant from the chunk
+    ///
+    /// * `offset`: The constant offset, returned from `push_constant`
+    pub fn get_constant(&mut self, offset: u8) -> Option<&Value> {
         self.constants.get(offset as usize)
     }
 
-    pub fn len(&self) -> usize {
+    /// Get the current offset of the code
+    ///
+    /// Often used for getting the current offset for patching jumps
+    pub fn get_offset(&self) -> usize {
         self.code.len()
     }
 
+    /// Get the source line of a code byte
     pub fn get_line(&self, offset: usize) -> u32 {
         self.lines[offset]
+    }
+
+    /// Set a byte in the chunk
+    pub fn set_byte(&mut self, offset: usize, byte: u8) {
+        self.code[offset] = byte;
     }
 }
 
@@ -221,14 +252,14 @@ mod tests {
     #[test]
     fn print() {
         let mut c = Chunk::new();
-        c.add_constant(Value::Number(0.));
-        c.add_op(Op::Return, 0);
-        c.add_op(Op::Constant(0), 0);
-        c.add_op(Op::Negate, 0);
-        c.add_op(Op::Add, 0);
-        c.add_op(Op::Subtract, 0);
-        c.add_op(Op::Multiply, 0);
-        c.add_op(Op::Divide, 0);
+        c.push_constant(Value::Number(0.));
+        c.push_op(Op::Return, 0);
+        c.push_op(Op::Constant(0), 0);
+        c.push_op(Op::Negate, 0);
+        c.push_op(Op::Add, 0);
+        c.push_op(Op::Subtract, 0);
+        c.push_op(Op::Multiply, 0);
+        c.push_op(Op::Divide, 0);
 
         assert_eq!(
             format!("{}", c),

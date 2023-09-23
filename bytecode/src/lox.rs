@@ -1,3 +1,5 @@
+//! The human interface for Lox
+
 use std::{io::Write, process};
 
 use clap::Parser;
@@ -10,6 +12,7 @@ struct CliArgs {
     file: Option<String>,
 }
 
+/// Run the CLI of the lox interpreter
 pub fn cli() {
     let args = CliArgs::parse();
 
@@ -33,6 +36,9 @@ fn interpret(vm: &mut VM, s: &str, repl: bool) {
     };
 }
 
+/// Start a repl
+///
+/// Exits on `<C-d>`
 pub fn repl() {
     let mut io = DefaultVMIO::new();
     let mut vm = VM::new(&mut io);
@@ -56,6 +62,7 @@ pub fn repl() {
     }
 }
 
+/// Run a file from a path
 pub fn run_file(path: &str) {
     let mut io = DefaultVMIO::new();
     let mut vm = VM::new(&mut io);

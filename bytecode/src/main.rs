@@ -1,11 +1,15 @@
-mod chunk;
-mod compiler;
-mod lox;
-mod op;
-mod scanner;
-mod token;
-mod value;
-mod vm;
+//! The entry point to the Lox bytecode compiler and interpreter
+
+#![warn(missing_docs)]
+
+pub mod chunk;
+pub mod compiler;
+pub mod lox;
+pub mod op;
+pub mod scanner;
+pub mod token;
+pub mod value;
+pub mod vm;
 
 fn main() {
     lox::cli();

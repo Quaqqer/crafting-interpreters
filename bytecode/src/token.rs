@@ -1,57 +1,113 @@
+//! Lox tokens
+
 #[derive(Debug, Clone)]
+/// A lox token
 pub struct Token {
+    /// The kind of token
     pub kind: TokenKind,
+    /// The source text of the token
     pub source: String,
+    /// The source line of the token
     pub line: u32,
 }
 
 #[derive(Debug, PartialEq, Clone)]
+/// A kind of token
 pub enum TokenKind {
+    /// `(`
     LParen,
+    /// `)`
     RParen,
+    /// `{`
     LBrace,
+    /// `}`
     RBrace,
+    /// `,`
     Comma,
+    /// `.`
     Dot,
+    /// `-`
     Minus,
+    /// `+`
     Plus,
+    /// `;`
     Semicolon,
+    /// `/`
     Slash,
+    /// `*`
     Star,
+    /// `!`
     Bang,
+    /// `!=`
     BangEqual,
+    /// `=`
     Equal,
+    /// `==`
     EqualEqual,
+    /// `>`
     Greater,
+    /// `>=`
     GreaterEqual,
+    /// `<`
     Less,
+    /// `<=`
     LessEqual,
 
     // Literals
+    /// An identifier (variable names)
+    ///
+    /// Example: `x`
     Identifier,
+    /// A string token
+    ///
+    /// Example: `"i am a string"`
     String,
+    /// A number
+    ///
+    /// Example: `123.3`
     Number,
 
     // Keywords
+    /// `and`
     And,
+    /// `class`
     Class,
+    /// `else`
     Else,
+    /// `false`
     False,
+    /// `for`
     For,
+    /// `fun`
     Fun,
+    /// `if`
     If,
+    /// `nil`
     Nil,
+    /// `or`
     Or,
+    /// `print`
     Print,
+    /// `return`
     Return,
+    /// `super`
     Super,
+    /// `this`
     This,
+    /// `true`
     True,
+    /// `var`
     Var,
+    /// `while`
     While,
 
+    /// The end of file token
     EOF,
+    /// An unknown character
     UnknownChar,
+    /// An unterminated string token
+    ///
+    /// Example: `"hello wo<EOF>`
     UnterminatedString,
 }
 
