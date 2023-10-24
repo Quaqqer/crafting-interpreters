@@ -223,12 +223,22 @@ impl<'a, IO: VmIO> VM<'a, IO> {
             };
             #[cfg(feature = "debug_trace")]
             {
-                eprintln!("{}-{} {} {:?}", prev_ii, self.ii(), op, self.stack);
+                eprint!("{}-{} {} [", prev_ii, self.ii(), op);
+                for i in 0..self.stack.len() {
+                    eprint!("{}", self.stack[i]);
+                    if i != self.stack.len() - 1 {
+                        eprint!(", ");
+                    }
+                }
+                eprintln!("]");
             }
 
             match op {
                 Op::Return => {
                     let v = self.pop();
+                    while self.frame().stack_i < self.stack.len() {
+                        self.pop();
+                    }
                     self.call_frames.pop().unwrap();
 
                     if self.call_frames.len() == 0 {
