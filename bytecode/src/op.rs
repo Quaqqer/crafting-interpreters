@@ -27,6 +27,7 @@ pub enum Opcode {
     JumpIfFalse,
     Jump,
     Loop,
+    Call,
 }
 
 impl From<Opcode> for u8 {
@@ -56,6 +57,7 @@ impl From<Opcode> for u8 {
             Opcode::JumpIfFalse => 21,
             Opcode::Jump => 22,
             Opcode::Loop => 23,
+            Opcode::Call => 24,
         }
     }
 }
@@ -87,6 +89,7 @@ impl From<u8> for Opcode {
             21 => Opcode::JumpIfFalse,
             22 => Opcode::Jump,
             23 => Opcode::Loop,
+            24 => Opcode::Call,
             _ => panic!("No such opcode {}", value),
         }
     }
@@ -120,6 +123,7 @@ pub enum Op {
     JumpIfFalse(u16),
     Jump(u16),
     Loop(u16),
+    Call(u8),
 }
 
 impl std::fmt::Display for Op {
@@ -149,6 +153,7 @@ impl std::fmt::Display for Op {
             Op::JumpIfFalse(a) => write!(f, "JUMP_IF_FALSE {}", a),
             Op::Jump(a) => write!(f, "JUMP {}", a),
             Op::Loop(a) => write!(f, "LOOP {}", a),
+            Op::Call(argc) => write!(f, "CALL {}", argc),
         }
     }
 }

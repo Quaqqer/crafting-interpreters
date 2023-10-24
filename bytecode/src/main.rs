@@ -10,6 +10,7 @@ pub mod scanner;
 pub mod token;
 pub mod value;
 pub mod vm;
+pub mod func;
 
 fn main() {
     lox::cli();

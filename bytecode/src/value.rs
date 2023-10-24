@@ -2,7 +2,10 @@
 //!
 use std::rc::Rc;
 
-use crate::chunk::Chunk;
+use crate::{
+    chunk::Chunk,
+    func::{Func, FuncKind},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 /// A basic value
@@ -52,15 +55,7 @@ pub enum HeapValue {
     /// A string
     String(String),
 
-    /// A function
-    Function {
-        /// The number of parameters for the function
-        arity: u32,
-        /// The function name
-        name: String,
-        /// The code chunk of the function
-        chunk: Chunk,
-    },
+    Function(Func),
 }
 
 impl HeapValue {
@@ -77,7 +72,10 @@ impl std::fmt::Display for HeapValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HeapValue::String(s) => write!(f, "{}", s),
-            HeapValue::Function { name, arity, .. } => write!(f, "{}({}...)", name, arity),
+            HeapValue::Function(Func { kind, .. }) => match kind {
+                FuncKind::Script => write!(f, "script"),
+                FuncKind::Function { arity, name } => write!(f, "{}({}...)", name, arity),
+            },
         }
     }
 }

@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use crate::{
     chunk::Chunk,
+    func::{Func, FuncKind},
     op::{Op, Opcode},
     scanner::Scanner,
     token::{Token as T, TokenKind as TK},
@@ -21,10 +22,25 @@ pub struct Compiler {
     /// The currently peeked token, used to allow 1 token lookahead
     peek: Option<T>,
     scanner: Scanner,
-    chunk: Chunk,
     locals: Vec<Local>,
-    depth: i32,
+    frames: Vec<CompileFrame>,
     line: u32,
+}
+
+struct CompileFrame {
+    chunk: Chunk,
+    locals_i: usize,
+    depth: i32,
+}
+
+impl CompileFrame {
+    pub fn new(locals_i: usize, depth: i32) -> Self {
+        CompileFrame {
+            chunk: Chunk::new(),
+            locals_i,
+            depth,
+        }
+    }
 }
 
 /// A compiler error
@@ -122,11 +138,34 @@ impl Compiler {
         Compiler {
             peek: None,
             scanner: Scanner::new(src),
-            chunk: Chunk::new(),
             locals: Vec::new(),
-            depth: 0,
+            frames: vec![CompileFrame::new(0, 0)],
             line: 1,
         }
+    }
+
+    fn frame(&self) -> &CompileFrame {
+        self.frames.last().unwrap()
+    }
+
+    fn frame_mut(&mut self) -> &mut CompileFrame {
+        self.frames.last_mut().unwrap()
+    }
+
+    fn chunk_mut(&mut self) -> &mut Chunk {
+        &mut self.frame_mut().chunk
+    }
+
+    fn chunk(&self) -> &Chunk {
+        &self.frame().chunk
+    }
+
+    fn depth(&self) -> i32 {
+        self.frame().depth
+    }
+
+    fn depth_mut(&mut self) -> &mut i32 {
+        &mut self.frame_mut().depth
     }
 
     fn peek(&mut self) -> Result<T, Error> {
@@ -194,21 +233,34 @@ impl Compiler {
     }
 
     fn emit(&mut self, op: Op) {
-        self.chunk.push_op(op, self.line);
+        let l = self.line;
+        self.chunk_mut().push_op(op, l);
     }
 
     fn emits(&mut self, ops: &[Op]) {
         for op in ops {
-            self.chunk.push_op(op.clone(), self.line);
+            let l = self.line;
+            self.chunk_mut().push_op(op.clone(), l);
         }
     }
 
     fn emit_constant(&mut self, v: Value) -> u8 {
-        self.chunk.push_constant(v)
+        self.chunk_mut().push_constant(v)
+    }
+
+    fn get_constant_str(&self, o: u8) -> &str {
+        let v = self.chunk().get_constant(o).unwrap();
+        match v {
+            Value::HeapValue(hval) => match hval.as_ref() {
+                HeapValue::String(s) => &s,
+                _ => panic!(),
+            },
+            _ => panic!(),
+        }
     }
 
     fn emit_string(&mut self, s: &str) -> u8 {
-        self.chunk
+        self.chunk_mut()
             .push_constant(Value::HeapValue(Rc::new(HeapValue::String(s.to_string()))))
     }
 
@@ -221,7 +273,7 @@ impl Compiler {
 
         #[cfg(feature = "debug_trace")]
         {
-            eprintln!("=== Code ===\n{}", self.chunk);
+            eprintln!("=== Code ===\n{}", self.chunk());
         }
 
         Ok(())
@@ -232,7 +284,7 @@ impl Compiler {
         let mut compiler = Compiler::new(src);
         compiler.parse()?;
 
-        Ok(compiler.chunk)
+        Ok(compiler.chunk().clone())
     }
 
     fn parse_precedence(&mut self, prec: Prec) -> Result<(), Error> {
@@ -351,7 +403,11 @@ impl Compiler {
 
     fn get_parse_rule(&self, operator: &TK) -> ParseRule {
         match operator {
-            TK::LParen => p_rule(Some(Box::new(|c, a| c.parse_grouping(a))), None, Prec::None),
+            TK::LParen => p_rule(
+                Some(Box::new(|c, a| c.parse_grouping(a))),
+                Some(Box::new(|c, a| c.parse_call(a))),
+                Prec::Call,
+            ),
             TK::RParen => p_rule(None, None, Prec::None),
             TK::LBrace => p_rule(None, None, Prec::None),
             TK::RBrace => p_rule(None, None, Prec::None),
@@ -398,7 +454,7 @@ impl Compiler {
                 Some(Box::new(|c, _| c.parse_binary())),
                 Prec::Comparison,
             ),
-            TK::Identifier => p_rule(Some(Box::new(|c, a| c.parse_var(a))), None, Prec::None),
+            TK::Identifier => p_rule(Some(Box::new(|c, a| c.parse_var_expr(a))), None, Prec::None),
             TK::String => p_rule(Some(Box::new(|c, a| c.parse_literal(a))), None, Prec::None),
             TK::Number => p_rule(Some(Box::new(|c, a| c.parse_number(a))), None, Prec::None),
             TK::And => p_rule(None, Some(Box::new(|c, _| c.parse_and())), Prec::And),
@@ -424,10 +480,27 @@ impl Compiler {
     }
 
     fn parse_declaration(&mut self) -> Result<(), Error> {
-        if self.peek()?.kind == TK::Var {
+        if self.peek()?.kind == TK::Fun {
+            self.parse_fun_declaration()
+        } else if self.peek()?.kind == TK::Var {
             self.parse_var_declaration()
         } else {
             self.parse_statement()
+        }
+    }
+
+    /// Parse a variable and add it to the scape
+    fn parse_variable(&mut self) -> Result<u8, Error> {
+        let t = self.consume(TK::Identifier)?;
+        self.declare_variable(&t)?;
+        if self.is_script() && self.depth() > 0 {
+            Ok(0)
+        } else {
+            Ok(
+                self.emit_constant(Value::HeapValue(Rc::new(HeapValue::String(
+                    t.source.clone(),
+                )))),
+            )
         }
     }
 
@@ -444,25 +517,28 @@ impl Compiler {
             self.emit(Op::Nil);
         }
 
-        self.define_variable();
-
-        if self.depth == 0 {
-            let c = self.emit_string(t.source.as_str());
-
-            self.emit(Op::DefineGlobal(c));
-        };
+        self.mark_initialized();
+        self.define_global(&t.source);
 
         self.consume(TK::Semicolon)?;
         Ok(())
     }
 
+    fn define_variable(&mut self, s: &str) {
+        if self.depth() > 0 || self.is_fun() {
+            self.mark_initialized();
+        } else {
+            self.define_global(s);
+        }
+    }
+
     fn declare_variable(&mut self, t: &T) -> Result<(), Error> {
-        if self.depth == 0 {
+        if self.depth() == 0 && self.is_script() {
             return Ok(());
         };
 
         for l in self.locals.iter().rev() {
-            if l.depth != self.depth && l.depth != -1 {
+            if l.depth != self.depth() && l.depth != -1 {
                 break;
             }
 
@@ -474,10 +550,18 @@ impl Compiler {
         self.add_local(t)
     }
 
-    fn define_variable(&mut self) {
-        if self.depth > 0 {
-            self.locals.last_mut().unwrap().depth = self.depth;
+    fn mark_initialized(&mut self) {
+        if self.depth() > 0 || self.is_fun() {
+            self.locals.last_mut().unwrap().depth = self.depth();
         }
+    }
+
+    fn define_global(&mut self, name: &str) {
+        if self.depth() == 0 {
+            let c = self.emit_string(name);
+
+            self.emit(Op::DefineGlobal(c));
+        };
     }
 
     fn parse_statement(&mut self) -> Result<(), Error> {
@@ -485,6 +569,7 @@ impl Compiler {
         match t.kind {
             TK::Print => self.parse_print(),
             TK::If => self.parse_if_statement(),
+            TK::Return => self.parse_return(),
             TK::While => self.parse_while_statement(),
             TK::For => self.parse_for_statement(),
             TK::LBrace => self.parse_block(),
@@ -507,7 +592,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn parse_var(&mut self, can_assign: bool) -> Result<(), Error> {
+    fn parse_var_expr(&mut self, can_assign: bool) -> Result<(), Error> {
         let t = self.consume(TK::Identifier)?;
 
         let (get, set): (Op, Op) = {
@@ -534,19 +619,25 @@ impl Compiler {
     where
         F: Fn(&mut Self) -> Result<U, Error>,
     {
-        self.depth += 1;
+        *self.depth_mut() += 1;
 
         let res = f(self)?;
 
-        while let Some(l) = self.locals.last() {
-            if l.depth == self.depth {
+        loop {
+            if self.locals.len() == self.frame().locals_i {
+                break;
+            }
+
+            let l = self.locals.last().unwrap();
+            if l.depth == self.depth() {
                 self.locals.pop();
                 self.emit(Op::Pop);
             } else {
                 break;
             }
         }
-        self.depth -= 1;
+
+        *self.depth_mut() -= 1;
 
         Ok(res)
     }
@@ -622,17 +713,17 @@ impl Compiler {
     }
 
     fn emit_jump(&mut self, opcode: Opcode, line: u32) -> Result<usize, Error> {
-        self.chunk.push(u8::from(opcode), line);
-        self.chunk.push(0xff, line);
-        self.chunk.push(0xff, line);
-        Ok(self.chunk.get_offset() - 2)
+        self.chunk_mut().push(u8::from(opcode), line);
+        self.chunk_mut().push(0xff, line);
+        self.chunk_mut().push(0xff, line);
+        Ok(self.chunk_mut().get_offset() - 2)
     }
 
     fn patch_jump(&mut self, addr: usize) -> Result<(), Error> {
-        let jump = (self.chunk.get_offset() - addr - 2) as u16;
+        let jump = (self.chunk_mut().get_offset() - addr - 2) as u16;
         let [l, r] = jump.to_le_bytes();
-        self.chunk.set_byte(addr, l);
-        self.chunk.set_byte(addr + 1, r);
+        self.chunk_mut().set_byte(addr, l);
+        self.chunk_mut().set_byte(addr + 1, r);
         Ok(())
     }
 
@@ -662,7 +753,7 @@ impl Compiler {
 
     fn parse_while_statement(&mut self) -> Result<(), Error> {
         let t = self.consume(TK::While)?;
-        let loop_start = self.chunk.get_offset();
+        let loop_start = self.chunk_mut().get_offset();
         self.consume(TK::LParen)?;
         self.parse_expression()?;
         self.consume(TK::RParen)?;
@@ -691,7 +782,7 @@ impl Compiler {
                 c.parse_expression()?;
             }
 
-            let mut loop_start = c.chunk.get_offset();
+            let mut loop_start = c.chunk_mut().get_offset();
 
             // Parse condition
             let mut exit_jump: Option<usize> = None;
@@ -705,7 +796,7 @@ impl Compiler {
             // Parse
             if !c.match_(TK::RParen)? {
                 let body_jump = c.emit_jump(Opcode::Jump, t.line)?;
-                let increment_start = c.chunk.get_offset();
+                let increment_start = c.chunk_mut().get_offset();
                 c.parse_expression()?;
                 c.emit(Op::Pop);
                 c.consume(TK::RParen)?;
@@ -728,17 +819,127 @@ impl Compiler {
     }
 
     fn emit_loop(&mut self, loop_start: usize, t: &T) -> Result<(), Error> {
-        self.chunk.push(u8::from(Opcode::Loop), t.line);
+        self.chunk_mut().push(u8::from(Opcode::Loop), t.line);
 
-        let offset = self.chunk.get_offset() - loop_start + 2;
+        let offset = self.chunk_mut().get_offset() - loop_start + 2;
         if offset > u16::MAX.into() {
             self.make_error(t, ErrorKind::Str("Loop body too large"))?;
         }
         let [l, r] = (offset as u16).to_le_bytes();
 
-        self.chunk.push(l, t.line);
-        self.chunk.push(r, t.line);
+        self.chunk_mut().push(l, t.line);
+        self.chunk_mut().push(r, t.line);
 
+        Ok(())
+    }
+
+    fn parse_fun_declaration(&mut self) -> Result<(), Error> {
+        self.consume(TK::Fun)?;
+
+        let ident_t = self.consume(TK::Identifier)?;
+        self.declare_variable(&ident_t)?;
+        self.mark_initialized();
+
+        let (params, chunk) = self.chunk_scoped(|c| {
+            c.consume(TK::LParen)?;
+            let mut params: u8 = 0;
+
+            if !c.match_(TK::RParen)? {
+                loop {
+                    let constant = c.parse_variable()?;
+                    let s = c.get_constant_str(constant).to_string();
+                    c.define_variable(&s);
+                    params += 1;
+
+                    if !c.match_(TK::Comma)? {
+                        break;
+                    }
+                }
+                c.consume(TK::RParen)?;
+            }
+
+            c.parse_block()?;
+
+            Ok(params)
+        })?;
+
+        let func = Func {
+            chunk,
+            kind: FuncKind::Function {
+                arity: params,
+                name: ident_t.source.clone(),
+            },
+        };
+        println!("func: {:?}", func);
+
+        let constant = self.emit_constant(Value::HeapValue(Rc::new(HeapValue::Function(func))));
+        self.emit(Op::Constant(constant));
+
+        self.define_global(&ident_t.source);
+
+        Ok(())
+    }
+
+    fn chunk_scoped<U, F>(&mut self, f: F) -> Result<(U, Chunk), Error>
+    where
+        F: Fn(&mut Self) -> Result<U, Error>,
+    {
+        self.frames
+            .push(CompileFrame::new(self.locals.len(), self.depth()));
+
+        let v = f(self)?;
+
+        while self.frame().locals_i < self.locals.len() {
+            self.locals.pop().unwrap();
+            self.emit(Op::Pop);
+        }
+
+        Ok((v, self.frames.pop().unwrap().chunk))
+    }
+
+    fn is_script(&self) -> bool {
+        self.frames.len() == 1
+    }
+
+    fn is_fun(&self) -> bool {
+        !self.is_script()
+    }
+
+    fn parse_call(&mut self, _can_assign: bool) -> Result<(), Error> {
+        let argc = self.arglist()?;
+        self.emit(Op::Call(argc));
+        Ok(())
+    }
+
+    fn arglist(&mut self) -> Result<u8, Error> {
+        let mut argc: u8 = 0;
+
+        self.consume(TK::LParen)?;
+        loop {
+            if self.match_(TK::RParen)? {
+                break;
+            }
+
+            self.parse_expression()?;
+            argc += 1;
+
+            if !self.match_(TK::Comma)? {
+                break;
+            }
+        }
+
+        Ok(argc)
+    }
+
+    fn parse_return(&mut self) -> Result<(), Error> {
+        self.consume(TK::Return)?;
+        if self.match_(TK::Semicolon)? {
+            self.emit(Op::Nil);
+        } else {
+            self.parse_expression()?;
+            self.consume(TK::Semicolon)?;
+        }
+        self.emit(Op::Return);
         Ok(())
     }
 }

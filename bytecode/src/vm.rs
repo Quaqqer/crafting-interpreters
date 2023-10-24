@@ -5,6 +5,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::{
     chunk::Chunk,
     compiler::{self, Compiler},
+    func::{Func, FuncKind},
     op::Op,
     value::{HeapValue, Value},
 };
@@ -33,11 +34,16 @@ impl VmIO for DefaultVMIO {
 
 /// The VM
 pub struct VM<'a, IO: VmIO = DefaultVMIO> {
-    chunk: Chunk,
-    ii: usize,
-    stack: Vec<Value>,
     globals: HashMap<String, Value>,
     io: &'a mut IO,
+    pub stack: Vec<Value>,
+    call_frames: Vec<CallFrame>,
+}
+
+struct CallFrame {
+    pub func: Func,
+    pub ii: usize,
+    pub stack_i: usize,
 }
 
 #[derive(Debug)]
@@ -79,6 +85,13 @@ pub enum RuntimeError {
     Undefined(String),
     /// A non-boolean value used in a boolean context
     NonBool(Value),
+    MismatchedNArgs {
+        expected: u8,
+        got: u8,
+    },
+    Uncallable {
+        v: Value,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -124,6 +137,14 @@ impl std::fmt::Display for RuntimeError {
                 "Cannot cast value of type {} into a boolean",
                 v.type_desc()
             ),
+            RuntimeError::MismatchedNArgs { expected, got } => write!(
+                f,
+                "Wrong number of arguments when calling function, expected {} but got {}",
+                expected, got
+            ),
+            RuntimeError::Uncallable { v } => {
+                write!(f, "Cannot call value of type {}", v.type_desc())
+            }
         }
     }
 }
@@ -132,43 +153,68 @@ impl<'a, IO: VmIO> VM<'a, IO> {
     /// Create a new VM
     pub fn new(io: &'a mut IO) -> Self {
         Self {
-            chunk: Chunk::new(),
-            ii: 0,
-            stack: Vec::new(),
             globals: HashMap::new(),
             io,
+            call_frames: vec![],
+            stack: vec![],
         }
     }
 
+    fn frame(&self) -> &CallFrame {
+        self.call_frames.last().unwrap()
+    }
+
+    fn frame_mut(&mut self) -> &mut CallFrame {
+        self.call_frames.last_mut().unwrap()
+    }
+
+    fn chunk(&self) -> &Chunk {
+        &self.frame().func.chunk
+    }
+
+    fn ii(&self) -> usize {
+        self.frame().ii
+    }
+
+    fn ii_mut(&mut self) -> &mut usize {
+        &mut self.frame_mut().ii
+    }
+
     fn fetch(&mut self) -> Result<Option<Op>, Error> {
-        if self.ii >= self.chunk.get_offset() {
+        if self.frame().ii >= self.frame().func.chunk.get_offset() {
             return Ok(None);
         }
 
-        match self.chunk.decode_op(self.ii) {
+        match self.frame().func.chunk.decode_op(self.frame().ii) {
             Ok((op, d)) => {
-                self.ii += d;
+                self.frame_mut().ii += d;
                 Ok(Some(op))
             }
-            Err(_) => self.make_runtime_error(RuntimeError::Decode(self.ii)),
+            Err(_) => self.make_runtime_error(RuntimeError::Decode(self.frame().ii)),
         }
     }
 
     fn make_runtime_error<U>(&self, kind: RuntimeError) -> Result<U, Error> {
         Err(Error::Runtime {
-            line: self.chunk.get_line(self.ii),
+            line: self.frame().func.chunk.get_line(self.frame().ii),
             kind,
         })
     }
 
     /// Interpret a code chunk
     pub fn interpret(&mut self, chunk: Chunk) -> Result<(), Error> {
-        self.chunk = chunk;
-        self.ii = 0;
+        self.call_frames = vec![CallFrame {
+            func: Func {
+                chunk,
+                kind: FuncKind::Script,
+            },
+            ii: 0,
+            stack_i: 0,
+        }];
 
         loop {
             #[cfg(feature = "debug_trace")]
-            let prev_ii = self.ii;
+            let prev_ii = self.ii();
 
             let op = if let Some(op) = self.fetch()? {
                 op
@@ -177,16 +223,23 @@ impl<'a, IO: VmIO> VM<'a, IO> {
             };
             #[cfg(feature = "debug_trace")]
             {
-                eprintln!("{}-{} {} {:?}", prev_ii, self.ii, op, self.stack);
+                eprintln!("{}-{} {} {:?}", prev_ii, self.ii(), op, self.stack);
             }
 
             match op {
                 Op::Return => {
-                    let s = format!("{}", self.pop());
-                    self.io.write(s.as_str());
+                    let v = self.pop();
+                    self.call_frames.pop().unwrap();
+
+                    if self.call_frames.len() == 0 {
+                        self.pop();
+                        return Ok(());
+                    }
+
+                    self.push(v);
                 }
                 Op::Constant(offset) => {
-                    let v = self.chunk.get_constant(offset).unwrap().clone();
+                    let v = self.chunk().get_constant(offset).unwrap().clone();
                     self.push(v);
                 }
                 Op::Negate => {
@@ -294,7 +347,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     self.pop();
                 }
                 Op::DefineGlobal(c) => {
-                    let v = self.chunk.get_constant(c).unwrap().clone();
+                    let v = self.frame().func.chunk.get_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -306,7 +359,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     self.globals.insert(s.to_string(), v);
                 }
                 Op::GetGlobal(c) => {
-                    let v = self.chunk.get_constant(c).unwrap().clone();
+                    let v = self.frame().func.chunk.get_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -321,7 +374,7 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     }
                 }
                 Op::SetGlobal(c) => {
-                    let v = self.chunk.get_constant(c).unwrap().clone();
+                    let v = self.chunk().get_constant(c).unwrap().clone();
                     let s = match &v {
                         Value::HeapValue(h) => match &*h.as_ref() {
                             HeapValue::String(s) => s,
@@ -337,22 +390,60 @@ impl<'a, IO: VmIO> VM<'a, IO> {
                     }
                 }
                 Op::GetLocal(l) => {
-                    self.push(self.stack[l as usize].clone());
+                    self.push(self.stack[self.frame().stack_i + l as usize].clone());
                 }
                 Op::SetLocal(l) => {
-                    self.stack[l as usize] = self.peek();
+                    let stack_offset = self.frame().stack_i;
+                    self.stack[stack_offset + l as usize] = self.peek();
                 }
                 Op::JumpIfFalse(j) => {
                     let v = self.peek();
                     if self.is_falsey(&v)? {
-                        self.ii += j as usize;
+                        *self.ii_mut() += j as usize;
                     }
                 }
                 Op::Jump(j) => {
-                    self.ii += j as usize;
+                    *self.ii_mut() += j as usize;
                 }
                 Op::Loop(j) => {
-                    self.ii -= j as usize;
+                    *self.ii_mut() -= j as usize;
+                }
+                Op::Call(argc) => {
+                    let v = self.peek_n(argc as usize);
+                    let ok = match &v {
+                        Value::HeapValue(hv) => match hv.as_ref() {
+                            HeapValue::Function(
+                                f @ Func {
+                                    kind: FuncKind::Function { arity, .. },
+                                    ..
+                                },
+                            ) => {
+                                if *arity != argc {
+                                    self.make_runtime_error(RuntimeError::MismatchedNArgs {
+                                        expected: *arity,
+                                        got: argc,
+                                    })?;
+                                }
+
+                                let stack_i = self.stack.len() - argc as usize - 1;
+                                // TODO: Call the function
+                                // TODO: Stack traces on errors
+                                self.call_frames.push(CallFrame {
+                                    func: f.clone(),
+                                    ii: 0,
+                                    stack_i,
+                                });
+
+                                true
+                            }
+                            _ => false,
+                        },
+                        _ => false,
+                    };
+
+                    if !ok {
+                        self.make_runtime_error(RuntimeError::Uncallable { v: v.clone() })?;
+                    }
                 }
             }
         }
@@ -384,7 +475,12 @@ impl<'a, IO: VmIO> VM<'a, IO> {
     }
 
     fn peek(&self) -> Value {
-        self.stack.last().unwrap().clone()
+        self.peek_n(0)
+    }
+
+    fn peek_n(&self, offset: usize) -> Value {
+        let i = self.stack.len() - 1 - offset;
+        self.stack[i].clone()
     }
 }
 

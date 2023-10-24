@@ -14,7 +14,7 @@ use crate::{
 /// * `code`: The code in the chunk
 /// * `constants`: The constant values referenced in the code vector
 /// * `lines`: The lines referenced for each code byte
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Chunk {
     code: Vec<u8>,
     constants: Vec<Value>,
@@ -89,6 +89,10 @@ impl Chunk {
                 let a = u16::from_le_bytes(self.code[offset + 1..offset + 3].try_into().unwrap());
                 Ok((Op::Loop(a), 3))
             }
+            Opcode::Call => {
+                let argc = self.code[offset + 1];
+                Ok((Op::Call(argc), 2))
+            }
         }
     }
 
@@ -152,6 +156,10 @@ impl Chunk {
                 self.push(l, line);
                 self.push(r, line);
             }
+            Op::Call(argc) => {
+                self.push_opcode(Opcode::Call, line);
+                self.push(argc, line);
+            }
         }
     }
 
@@ -176,7 +184,7 @@ impl Chunk {
     /// Get a constant from the chunk
     ///
     /// * `offset`: The constant offset, returned from `push_constant`
-    pub fn get_constant(&mut self, offset: u8) -> Option<&Value> {
+    pub fn get_constant(&self, offset: u8) -> Option<&Value> {
         self.constants.get(offset as usize)
     }
 
